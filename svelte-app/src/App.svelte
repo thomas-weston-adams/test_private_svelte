@@ -12,7 +12,34 @@
   let showRegistrationModal = false;
   let intendedCourse = '';
   let classSearch = '';
-  let selectedClassId = '';
+
+  const counties = ['Adair', 'Boyd', 'Campbell', 'Fayette', 'Franklin', 'Jefferson', 'Perry', 'Rowan', 'Warren'];
+  const payOptions = ['No', 'Yes'];
+  const payers = ['Self', 'Agency', 'Grant', 'Other'];
+  const jobCategories = ['Emergency Management', 'Fire', 'Law Enforcement', 'Public Health', 'Healthcare', 'Public Works', 'Volunteer'];
+  const registrantTypes = ['County Official', 'Local EM', 'State Agency', 'Federal Partner', 'Nonprofit', 'Private Sector', 'Other'];
+
+  const emptyForm = {
+    firstName: '',
+    middleInitial: '',
+    lastName: '',
+    agency: '',
+    title: '',
+    phone: '',
+    cell: '',
+    email: '',
+    county: '',
+    beingPaid: '',
+    paidBy: '',
+    jobCategory: '',
+    registrantType: '',
+    selectedClassId: '',
+    accommodations: '',
+    ageConfirmed: '',
+    prereqAgreement: false
+  };
+
+  let registrationForm = { ...emptyForm };
 
   const regions = ['All', ...new Set(trainings.map((t) => t.region))];
   const modes = ['All', ...new Set(trainings.map((t) => t.mode))];
@@ -24,7 +51,6 @@
   };
   const toICSDate = (dateString) => dateString.replaceAll('-', '');
   const escapeICS = (value) => String(value).replaceAll('\\', '\\\\').replaceAll(';', '\\;').replaceAll(',', '\\,').replaceAll('\n', '\\n');
-
 
   function addDaysToIsoDate(isoDate, days) {
     const [y, m, d] = isoDate.split('-').map(Number);
@@ -108,8 +134,29 @@
   function openRegistration(training) {
     intendedCourse = `${training.title} (${formatDate(training.startDate)}-${formatDate(training.endDate)})`;
     classSearch = '';
-    selectedClassId = '';
+    registrationForm = { ...emptyForm };
     showRegistrationModal = true;
+  }
+
+  function handleRegistrationSubmit() {
+    const selectedClass = trainings.find((t) => String(t.id) === registrationForm.selectedClassId);
+    const payload = {
+      ...registrationForm,
+      selectedClass: selectedClass ? `${selectedClass.title} - ${selectedClass.location}` : '',
+      submittedAtEastern: today
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kyem-registration-${registrationForm.lastName || 'draft'}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    showRegistrationModal = false;
   }
 
   const inQuery = (training) => {
@@ -129,6 +176,21 @@
     const q = classSearch.trim().toLowerCase();
     return !q || `${training.title} ${training.location} ${training.startDate}`.toLowerCase().includes(q);
   });
+
+  $: isFormValid =
+    registrationForm.firstName &&
+    registrationForm.lastName &&
+    registrationForm.agency &&
+    registrationForm.title &&
+    registrationForm.phone &&
+    registrationForm.email &&
+    registrationForm.county &&
+    registrationForm.beingPaid &&
+    registrationForm.jobCategory &&
+    registrationForm.registrantType &&
+    registrationForm.selectedClassId &&
+    registrationForm.ageConfirmed &&
+    registrationForm.prereqAgreement;
 </script>
 
 <a class="skip-link" href="#results">Skip to training results</a>
@@ -137,8 +199,8 @@
   <header>
     <p class="eyebrow">UNOFFICIAL PROTOTYPE</p>
     <h1>Kentucky Emergency Management Training Calendar</h1>
-    <p class="intro">Desktop table view restored; mobile view now stacks each row for readability and easier tapping.</p>
-    <p class="intro-note">Note: the external Logiforms registration page is managed outside this prototype. We can improve handoff and guidance here, but the external form itself must be remediated separately for full ADA compliance.</p>
+    <p class="intro">Integrated training and registration prototype with ADA-focused form structure.</p>
+    <p class="intro-note">This prototype replaces the legacy look/feel by keeping the registration fields in an accessible in-app dialog connected directly to the selected training workflow.</p>
   </header>
 
   <section class="controls" aria-label="Filter trainings">
@@ -199,22 +261,84 @@
   <div class="modal-backdrop" role="presentation" on:click={() => (showRegistrationModal = false)}></div>
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title" aria-describedby="registration-modal-desc">
     <button type="button" class="close-modal" aria-label="Close registration dialog" on:click={() => (showRegistrationModal = false)}>×</button>
-    <h2 id="registration-modal-title">Confirm class selection before registration</h2>
+    <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
     <p>You clicked: <strong>{intendedCourse}</strong></p>
-    <p id="registration-modal-desc" class="warning">Selection is intentionally not prefilled. Search/select class before continuing.</p>
-    <label>Search classes<input bind:value={classSearch} placeholder="Type course, county, or date" /></label>
-    <label>Choose class *
-      <select bind:value={selectedClassId}>
-        <option value="">-- Select class from search results --</option>
-        {#each searchableClassOptions as t}
-          <option value={t.id}>{formatDate(t.startDate)} — {t.title}, {t.location}</option>
-        {/each}
-      </select>
-    </label>
-    <div class="modal-actions">
-      <button type="button" on:click={() => (showRegistrationModal = false)}>Cancel</button>
-      <button type="button" class="primary" disabled={!selectedClassId}>Continue to registration</button>
-    </div>
+    <p id="registration-modal-desc" class="warning">Class is intentionally not prefilled. Search and select from the class list below.</p>
+
+    <form class="reg-grid" on:submit|preventDefault={handleRegistrationSubmit}>
+      <label>First Name *<input bind:value={registrationForm.firstName} required /></label>
+      <label>MI<input maxlength="1" bind:value={registrationForm.middleInitial} /></label>
+      <label>Last Name *<input bind:value={registrationForm.lastName} required /></label>
+
+      <label>Agency *<input bind:value={registrationForm.agency} required /></label>
+      <label>Title *<input bind:value={registrationForm.title} required /></label>
+
+      <label>Phone *<input bind:value={registrationForm.phone} required /></label>
+      <label>Cell<input bind:value={registrationForm.cell} /></label>
+
+      <label>Email *<input type="email" bind:value={registrationForm.email} required /></label>
+      <label>County *
+        <select bind:value={registrationForm.county} required>
+          <option value="">-- Please select --</option>
+          {#each counties as c}<option value={c}>{c}</option>{/each}
+        </select>
+      </label>
+
+      <label>Being paid to attend? *
+        <select bind:value={registrationForm.beingPaid} required>
+          <option value="">-- Please select --</option>
+          {#each payOptions as opt}<option value={opt}>{opt}</option>{/each}
+        </select>
+      </label>
+
+      <label>If paid, by whom?
+        <select bind:value={registrationForm.paidBy}>
+          <option value="">-- Please select --</option>
+          {#each payers as p}<option value={p}>{p}</option>{/each}
+        </select>
+      </label>
+
+      <label>Job category *
+        <select bind:value={registrationForm.jobCategory} required>
+          <option value="">-- Please select --</option>
+          {#each jobCategories as j}<option value={j}>{j}</option>{/each}
+        </select>
+      </label>
+
+      <label>Registrant type *
+        <select bind:value={registrationForm.registrantType} required>
+          <option value="">-- Please select --</option>
+          {#each registrantTypes as r}<option value={r}>{r}</option>{/each}
+        </select>
+      </label>
+
+      <label class="full">Search classes<input bind:value={classSearch} placeholder="Type course, county, or date" /></label>
+      <label class="full">Choose class *
+        <select bind:value={registrationForm.selectedClassId} required>
+          <option value="">-- Select class from search results --</option>
+          {#each searchableClassOptions as t}
+            <option value={String(t.id)}>{formatDate(t.startDate)} — {t.title}, {t.location}</option>
+          {/each}
+        </select>
+      </label>
+
+      <label class="full">Special accommodations / accessibility needs
+        <textarea rows="4" bind:value={registrationForm.accommodations}></textarea>
+      </label>
+
+      <fieldset class="full inline">
+        <legend>Age *</legend>
+        <label><input type="radio" bind:group={registrationForm.ageConfirmed} value="over18" required /> I am over the age of 18.</label>
+        <label><input type="radio" bind:group={registrationForm.ageConfirmed} value="under18" required /> I am under the age of 18.</label>
+      </fieldset>
+
+      <label class="full checkbox"><input type="checkbox" bind:checked={registrationForm.prereqAgreement} /> I agree to provide prerequisites and confirm information is accurate. *</label>
+
+      <div class="modal-actions full">
+        <button type="button" on:click={() => (showRegistrationModal = false)}>Cancel</button>
+        <button type="submit" class="primary" disabled={!isFormValid}>Submit registration draft</button>
+      </div>
+    </form>
   </section>
 {/if}
 
@@ -225,7 +349,7 @@
   .skip-link:focus { left: 1rem; top: 1rem; width: auto; height: auto; background: #fff; padding: .5rem .75rem; border: 2px solid #0f5db0; border-radius: 8px; z-index: 1000; }
   .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
   label { display: grid; gap: .35rem; color: #1f3350; }
-  input, select { padding: .6rem; border: 1px solid #c5d0df; border-radius: 8px; font: inherit; }
+  input, select, textarea { padding: .6rem; border: 1px solid #c5d0df; border-radius: 8px; font: inherit; }
   .dates-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .75rem 0; }
   .dates-row button { border: 1px solid #c5d0df; background: #fff; border-radius: 999px; padding: .26rem .6rem; }
   .dates-row button.selected { background: #e7f1ff; border-color: #8fb0d8; }
@@ -248,13 +372,18 @@
   .calendar-btn.outlook { border-color: #8fb0d8; background: #eef6ff; color: #0a3f73; }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(8,23,48,.45); }
-  .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(680px, 92vw); background: #fff; border-radius: 12px; padding: 1rem; }
+  .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(980px, 95vw); max-height: 92vh; overflow: auto; background: #fff; border-radius: 12px; padding: 1rem; }
   .close-modal { position: absolute; top: .35rem; right: .45rem; border: 1px solid #ccd8ea; background: #fff; border-radius: 6px; width: 2rem; height: 2rem; font-size: 1.2rem; }
   .warning { background: #fff5e6; border: 1px solid #ffd9a3; border-radius: 8px; padding: .55rem; }
+  .reg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+  .reg-grid .full { grid-column: 1 / -1; }
+  .inline { border: 1px solid #dce6f2; border-radius: 8px; padding: .6rem; }
+  .inline legend { padding: 0 .2rem; }
+  .checkbox { display: flex; align-items: flex-start; gap: .5rem; }
   .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .6rem; }
   .primary { background: #1c73d3; color: #fff; border: 1px solid #0f5db0; border-radius: 8px; }
 
-  button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #0f5db0; outline-offset: 2px; }
+  button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #0f5db0; outline-offset: 2px; }
 
   @media (max-width: 900px) {
     .layout { padding: 1rem; }
@@ -265,5 +394,6 @@
     tr { background: #fbfdff; border: 1px solid #dce6f2; border-radius: 10px; margin-bottom: .7rem; padding: .4rem; }
     td { border: 0; padding: .45rem .35rem; }
     td::before { content: attr(data-label); display: block; color: #5a6f8d; font-size: .8rem; margin-bottom: .12rem; }
+    .reg-grid { grid-template-columns: 1fr; }
   }
 </style>
