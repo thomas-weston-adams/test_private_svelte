@@ -1,6 +1,9 @@
 <script>
   import trainings from './trainings.json';
 
+  const easternIsoFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+  const easternDateFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York' });
+  const today = easternIsoFormatter.format(new Date());
 
   let query = '';
   let selectedRegion = 'All';
@@ -10,6 +13,125 @@
   let showRegistrationModal = false;
   let intendedCourse = '';
   let classSearch = '';
+  let selectedClassId = '';
+
+  const regions = ['All', ...new Set(trainings.map((t) => t.region))];
+  const modes = ['All', ...new Set(trainings.map((t) => t.mode))];
+  const allAvailableDates = ['All dates', ...new Set(trainings.map((t) => t.startDate).sort())];
+
+  const formatDate = (dateString) => {
+    const [y, m, d] = dateString.split('-').map(Number);
+    return easternDateFormatter.format(new Date(Date.UTC(y, m - 1, d, 12)));
+  };
+  const toICSDate = (dateString) => dateString.replaceAll('-', '');
+  const escapeICS = (value) => String(value).replaceAll('\\', '\\\\').replaceAll(';', '\\;').replaceAll(',', '\\,').replaceAll('\n', '\\n');
+
+
+  function addDaysToIsoDate(isoDate, days) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const localDate = new Date(y, m - 1, d);
+    localDate.setDate(localDate.getDate() + days);
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  function clearFilters() {
+    query = '';
+    selectedRegion = 'All';
+    selectedMode = 'All';
+    selectedDate = 'All dates';
+  }
+
+  function buildEventDetails(training) {
+    return [
+      `Audience: ${training.audience}`,
+      `Delivery mode: ${training.mode}`,
+      `Region: ${training.region}`,
+      `Tuition: ${training.tuition}`,
+      `Other costs / notes: ${training.other}`,
+      `Registration status: ${training.registration}`
+    ].join('\n');
+  }
+
+  function getCalendarUrls(training) {
+    const endExclusiveDate = addDaysToIsoDate(training.endDate, 1);
+
+    return {
+      google: `https://calendar.google.com/calendar/render?${new URLSearchParams({
+        action: 'TEMPLATE',
+        text: training.title,
+        dates: `${toICSDate(training.startDate)}/${toICSDate(endExclusiveDate)}`,
+        details: buildEventDetails(training),
+        location: training.location
+      }).toString()}`,
+      outlook: `https://outlook.office.com/calendar/0/deeplink/compose?${new URLSearchParams({
+        path: '/calendar/action/compose',
+        rru: 'addevent',
+        startdt: training.startDate,
+        enddt: endExclusiveDate,
+        subject: training.title,
+        body: buildEventDetails(training),
+        location: training.location,
+        allday: 'true'
+      }).toString()}`
+    };
+  }
+
+  function downloadICS(training) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const dtStart = toICSDate(training.startDate);
+    const dtEnd = toICSDate(addDaysToIsoDate(training.endDate, 1));
+
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KYEM Mirror//Training Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:kyem-training-${training.id}@kyem-mirror.local`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${dtStart}`, `DTEND;VALUE=DATE:${dtEnd}`,
+      `SUMMARY:${escapeICS(training.title)}`,
+      `LOCATION:${escapeICS(training.location)}`,
+      `DESCRIPTION:${escapeICS(buildEventDetails(training))}`,
+      'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${training.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function openRegistration(training) {
+    intendedCourse = `${training.title} (${formatDate(training.startDate)}-${formatDate(training.endDate)})`;
+    classSearch = '';
+    selectedClassId = '';
+    showRegistrationModal = true;
+  }
+
+  const inQuery = (training) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate].join(' ').toLowerCase().includes(q);
+  };
+
+  $: filtered = trainings.filter((training) => {
+    const regionMatch = selectedRegion === 'All' || training.region === selectedRegion;
+    const modeMatch = selectedMode === 'All' || training.mode === selectedMode;
+    const dateMatch = selectedDate === 'All dates' || training.startDate === selectedDate;
+    return regionMatch && modeMatch && dateMatch && inQuery(training);
+  });
+
+  $: searchableClassOptions = trainings.filter((training) => {
+    const q = classSearch.trim().toLowerCase();
+    return !q || `${training.title} ${training.location} ${training.startDate}`.toLowerCase().includes(q);
+  });
+</script>
+
 
   const counties = ['Adair', 'Boyd', 'Campbell', 'Fayette', 'Franklin', 'Jefferson', 'Perry', 'Rowan', 'Warren'];
   const payOptions = ['No', 'Yes'];
@@ -286,6 +408,7 @@
   <header>
     <p class="eyebrow">UNOFFICIAL PROTOTYPE</p>
     <h1>Kentucky Emergency Management Training Calendar</h1>
+    <p class="intro">Desktop table view restored; mobile view now stacks each row for readability and easier tapping.</p>
     <p class="intro">Integrated training and registration prototype with ADA-focused form structure.</p>
     <p class="intro-note">This prototype replaces the legacy look/feel by keeping the registration fields in an accessible in-app dialog connected directly to the selected training workflow.</p>
   </header>
@@ -304,6 +427,12 @@
     <button on:click={clearFilters}>Show all</button>
   </div>
 
+  <p class="summary">Showing {filtered.length} of {trainings.length} trainings · Updated {formatDate(today)}</p>
+
+  <section class="table-wrap" aria-label="Training results">
+    <table>
+      <thead>
+        <tr><th>Course</th><th>Dates</th><th>Region</th><th>Location</th><th>Tuition</th><th>Other costs / notes</th><th>Status</th><th>Registration</th><th>Calendar</th></tr>
   <p class="summary" role="status" aria-live="polite">Showing {filtered.length} of {trainings.length} trainings · Updated {formatDate(today)} (Eastern)</p>
 
   <section id="results" class="table-wrap" aria-label="Training results">
@@ -325,11 +454,13 @@
               <td data-label="Tuition">{t.tuition}</td>
               <td data-label="Other costs / notes">{t.other}</td>
               <td data-label="Status"><span class="badge">{t.registration}</span></td>
+              <td data-label="Registration"><button class="register-btn" on:click={() => openRegistration(t)}>Register</button></td>
               <td data-label="Registration"><button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button></td>
               <td data-label="Calendar">
                 <details class="calendar-nested">
                   <summary class="calendar-summary">Add to calendar</summary>
                   <div class="calendar-menu">
+                    <button class="calendar-btn apple" on:click={() => downloadICS(t)}> Apple (.ics)</button>
                     <button type="button" class="calendar-btn apple" on:click={() => downloadICS(t)}> Apple (.ics)</button>
                     <a class="calendar-btn google" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer">G Google</a>
                     <a class="calendar-btn outlook" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer">O Outlook</a>
@@ -346,6 +477,12 @@
 
 {#if showRegistrationModal}
   <div class="modal-backdrop" role="presentation" on:click={() => (showRegistrationModal = false)}></div>
+  <section class="modal" role="dialog" aria-modal="true">
+    <h2>Confirm class selection before registration</h2>
+    <p>You clicked: <strong>{intendedCourse}</strong></p>
+    <p class="warning">Selection is intentionally not prefilled. Search/select class before continuing.</p>
+    <label>Search classes<input bind:value={classSearch} placeholder="Type course, county, or date" /></label>
+    <label>Choose class *
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title" aria-describedby="registration-modal-desc">
     <button type="button" class="close-modal" aria-label="Close registration dialog" on:click={() => (showRegistrationModal = false)}>×</button>
     <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
@@ -517,6 +654,9 @@
         {/each}
       </select>
     </label>
+    <div class="modal-actions">
+      <button on:click={() => (showRegistrationModal = false)}>Cancel</button>
+      <button class="primary" disabled={!selectedClassId}>Continue to registration</button>
 
     <div class="modal-actions">
       <button class="secondary" on:click={closeRegistration}>Cancel</button>
@@ -528,6 +668,9 @@
 <style>
   .layout { max-width: 1300px; margin: 0 auto; background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.1); padding: 1.5rem; }
   .eyebrow { text-transform: uppercase; letter-spacing: .08em; color: #35578a; }
+  .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
+  label { display: grid; gap: .35rem; color: #1f3350; }
+  input, select { padding: .6rem; border: 1px solid #c5d0df; border-radius: 8px; font: inherit; }
   .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
   .skip-link:focus { left: 1rem; top: 1rem; width: auto; height: auto; background: #fff; padding: .5rem .75rem; border: 2px solid #0f5db0; border-radius: 8px; z-index: 1000; }
   .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }

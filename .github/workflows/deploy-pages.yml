@@ -3,6 +3,8 @@ name: Deploy Svelte app to GitHub Pages
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
 
   workflow_dispatch:
 
@@ -39,12 +41,18 @@ jobs:
         run: npm run build
 
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        if: github.event_name != 'pull_request'
 
         uses: actions/upload-pages-artifact@v3
         with:
           path: svelte-app/public
 
   deploy:
+    if: github.event_name != 'pull_request'
 
     environment:
       name: github-pages
