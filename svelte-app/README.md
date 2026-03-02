@@ -141,3 +141,20 @@ Yes — this is a good idea to avoid impacting any other project history.
 5. Push future updates to the new repo remote so deployment and history stay isolated.
 
 Tip: if you want this repo to only track the new destination, replace `origin` instead of adding `mirror`.
+
+
+### Why a PR branch says "not deployed"
+
+- This is expected: GitHub Pages deploy runs on pushes to `main`.
+- Pull requests now run a **build check** only (no Pages deploy), so you still get validation on the PR.
+- If you see "This branch has conflicts that must be resolved", merge/rebase `main` into your branch first, then re-run checks.
+- After merge to `main`, open **Actions → Deploy Svelte app to GitHub Pages → deploy** and use the published URL.
+
+
+### If you still do not see updates on the live site
+
+1. Confirm the commit is merged into `main` (PR branches are not deployed).
+2. In **Actions**, open the latest deploy run and verify both `build` and `deploy` jobs succeeded.
+3. Open **Settings → Pages** and confirm the published URL points to this repo.
+4. Hard-refresh the browser (`Ctrl+Shift+R` / `Cmd+Shift+R`) to bypass cached assets.
+5. If needed, open the site in an incognito window to verify fresh content.

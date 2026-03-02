@@ -3,6 +3,7 @@ name: Deploy Svelte app to GitHub Pages
 on:
   push:
     branches: ["main"]
+
   workflow_dispatch:
 
 permissions:
@@ -38,14 +39,13 @@ jobs:
         run: npm run build
 
       - name: Configure Pages
-        uses: actions/configure-pages@v5
 
-      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: svelte-app/public
 
   deploy:
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
