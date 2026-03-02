@@ -231,10 +231,14 @@
   let selectedRoleId = orgChart.id;
   let zoom = 105;
   let chartViewMode = 'landscape';
+  let chartVisualization = 'tree';
+  let operationPeriodLabel = '';
+  let selectedSnapshotId = '';
 
   let masterContacts = [...defaultMasterContacts];
   let assignmentsByRole = { ...defaultAssignments };
   let assignmentHistory = [];
+  let operationSnapshots = [];
   let contactForm = { id: '', name: '', agency: '', title: '', email: '', phone: '' };
   let googleContactsCsvUrl = '';
   let googlePushWebhookUrl = '';
@@ -257,6 +261,7 @@
   const GOOGLE_PUSH_TOKEN_KEY = 'eoc-google-push-token-v1';
   const ORG_MASTER_SHEET_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/edit?usp=sharing&ouid=108896342127940549606&rtpof=true&sd=true';
   const ORG_MASTER_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/export?format=csv';
+  const OPERATION_SNAPSHOTS_KEY = 'eoc-operation-snapshots-v1';
 
   const flattenRoles = (node) => [node, ...node.children.flatMap(flattenRoles)];
   const roleList = flattenRoles(orgChart);
@@ -268,6 +273,10 @@
   $: selectedRole = roleById[selectedRoleId] || orgChart;
   $: selectedAssignedContact = contactsById[assignmentsByRole[selectedRole.id]];
   $: populatedRoles = roleList.filter((role) => Boolean(assignmentsByRole[role.id])).length;
+  $: recentContactByRole = assignmentHistory.reduce((acc, row) => {
+    if (!acc[row.roleId] && contactsById[row.contactId]) acc[row.roleId] = contactsById[row.contactId];
+    return acc;
+  }, {});
 
   function setPage(page) {
     currentPage = page;
@@ -275,8 +284,13 @@
   }
 
   function handleRoleSelect(event) {
-    selectedRoleId = event.detail.roleId;
+    const roleId = event.detail.roleId;
+    selectedRoleId = roleId;
     hydrateFormFromAssignedContact();
+
+    if (!assignmentsByRole[roleId] && recentContactByRole[roleId]) {
+      applyContactToForm(recentContactByRole[roleId]);
+    }
   }
 
   function hydrateFormFromAssignedContact() {
@@ -286,6 +300,45 @@
     }
 
     contactForm = { id: '', name: '', agency: '', title: selectedRole.name, email: '', phone: '' };
+  }
+
+
+  function applyContactToForm(contact) {
+    if (!contact) return;
+    contactForm = {
+      id: contact.id || '',
+      name: contact.name || contactForm.name,
+      agency: contact.agency || '',
+      title: contact.title || selectedRole.name,
+      email: contact.email || '',
+      phone: contact.phone || ''
+    };
+  }
+
+  function handleNameInput() {
+    const q = contactForm.name.trim().toLowerCase();
+    if (!q) return;
+
+    const exactMatch = masterContacts.find((contact) => contact.name.toLowerCase() === q);
+    if (exactMatch) {
+      applyContactToForm(exactMatch);
+      return;
+    }
+
+    const startsWithMatches = masterContacts.filter((contact) => contact.name.toLowerCase().startsWith(q));
+    if (startsWithMatches.length === 1) {
+      applyContactToForm(startsWithMatches[0]);
+    }
+  }
+
+  function handleEmailInput() {
+    const q = contactForm.email.trim().toLowerCase();
+    if (!q) return;
+
+    const emailMatch = masterContacts.find((contact) => contact.email.toLowerCase() === q);
+    if (emailMatch) {
+      applyContactToForm(emailMatch);
+    }
   }
 
   function saveRoleAssignment() {
@@ -470,6 +523,48 @@
     downloadFile('ics-203-draft.json', JSON.stringify(payload, null, 2), 'application/json');
   }
 
+  function downloadIcs203Html() {
+    const rosterRows = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return `<tr><td>${role.name}</td><td>${contact?.name || 'Vacant'}</td><td>${contact?.agency || ''}</td><td>${contact?.title || ''}</td><td>${contact?.phone || ''}</td></tr>`;
+    }).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 203 Draft</title><style>body{font-family:Arial,sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #333;padding:6px;text-align:left}</style></head><body><h1>ICS 203 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><p><strong>Operational Period:</strong> ${ics203Form.operationalPeriod}</p><p><strong>Prepared By:</strong> ${ics203Form.preparedBy} | <strong>Approved By:</strong> ${ics203Form.approvedBy}</p><table><thead><tr><th>Role</th><th>Name</th><th>Agency</th><th>Title</th><th>Phone</th></tr></thead><tbody>${rosterRows}</tbody></table></body></html>`;
+
+    downloadFile('ics-203-draft.html', html, 'text/html;charset=utf-8');
+  }
+
+  function downloadIcs207Html() {
+    const nodes = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return `<div style="border:1px solid #888;border-radius:8px;padding:8px;margin:6px;min-width:220px"><strong>${role.name}</strong><div>${contact?.name || 'Vacant'}</div><div>${contact?.phone || ''}</div></div>`;
+    }).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 207 Draft</title></head><body style="font-family:Arial,sans-serif;padding:16px"><h1>ICS 207 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><div style="display:flex;flex-wrap:wrap">${nodes}</div></body></html>`;
+    downloadFile('ics-207-draft.html', html, 'text/html;charset=utf-8');
+  }
+
+  function saveOperationSnapshot() {
+    const name = operationPeriodLabel.trim() || ics203Form.operationalPeriod.trim() || `Operation ${new Date().toLocaleString()}`;
+    const snapshot = {
+      id: `snapshot-${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      ics203Form: { ...ics203Form },
+      assignmentsByRole: { ...assignmentsByRole }
+    };
+
+    operationSnapshots = [snapshot, ...operationSnapshots].slice(0, 50);
+    selectedSnapshotId = snapshot.id;
+  }
+
+  function loadOperationSnapshot() {
+    const snap = operationSnapshots.find((item) => item.id === selectedSnapshotId);
+    if (!snap) return;
+    ics203Form = { ...snap.ics203Form };
+    assignmentsByRole = { ...snap.assignmentsByRole };
+  }
+
   function downloadIcs207Csv() {
     const header = 'Role,Assigned Name,Agency,Email,Phone';
     const rows = roleList.map((role) => {
@@ -506,6 +601,7 @@
     const storedGoogleContactsUrl = localStorage.getItem(GOOGLE_CONTACTS_URL_KEY);
     const storedGooglePushUrl = localStorage.getItem(GOOGLE_PUSH_URL_KEY);
     const storedGooglePushToken = localStorage.getItem(GOOGLE_PUSH_TOKEN_KEY);
+    const storedSnapshots = localStorage.getItem(OPERATION_SNAPSHOTS_KEY);
 
     if (storedContacts) masterContacts = JSON.parse(storedContacts);
     if (storedAssignments) assignmentsByRole = JSON.parse(storedAssignments);
@@ -514,6 +610,7 @@
     if (!storedGoogleContactsUrl) googleContactsCsvUrl = ORG_MASTER_SHEET_CSV_URL;
     if (storedGooglePushUrl) googlePushWebhookUrl = storedGooglePushUrl;
     if (storedGooglePushToken) googleWebhookToken = storedGooglePushToken;
+    if (storedSnapshots) operationSnapshots = JSON.parse(storedSnapshots);
 
     hydrateFormFromAssignedContact();
 
@@ -527,6 +624,7 @@
     localStorage.setItem(GOOGLE_CONTACTS_URL_KEY, googleContactsCsvUrl);
     localStorage.setItem(GOOGLE_PUSH_URL_KEY, googlePushWebhookUrl);
     localStorage.setItem(GOOGLE_PUSH_TOKEN_KEY, googleWebhookToken);
+    localStorage.setItem(OPERATION_SNAPSHOTS_KEY, JSON.stringify(operationSnapshots));
   }
 </script>
 
@@ -609,6 +707,10 @@
         <button type="button" class:active={chartViewMode === 'landscape'} on:click={() => (chartViewMode = 'landscape')}>Landscape view</button>
         <button type="button" class:active={chartViewMode === 'portrait'} on:click={() => (chartViewMode = 'portrait')}>Portrait view</button>
       </div>
+      <div class="view-toggle" role="group" aria-label="Visualization mode">
+        <button type="button" class:active={chartVisualization === 'tree'} on:click={() => (chartVisualization = 'tree')}>Tree</button>
+        <button type="button" class:active={chartVisualization === 'roster'} on:click={() => (chartVisualization = 'roster')}>Roster board</button>
+      </div>
       <button type="button" on:click={printOrgChart}>Print / Save PDF</button>
     </section>
 
@@ -639,24 +741,60 @@
       <div class="panel-actions">
         <button type="button" on:click={downloadIcs203Json}>Download ICS 203 JSON</button>
         <button type="button" on:click={downloadIcs207Csv}>Download ICS 207 CSV</button>
+        <button type="button" on:click={downloadIcs203Html}>Download ICS 203 HTML (Word-friendly)</button>
+        <button type="button" on:click={downloadIcs207Html}>Download ICS 207 HTML (Word-friendly)</button>
       </div>
+    </section>
+
+
+    <section class="ics-tools no-print" aria-label="Operation period snapshots">
+      <h2>Operation Period Snapshots</h2>
+      <div class="ics-grid">
+        <label>Snapshot name<input bind:value={operationPeriodLabel} placeholder="e.g. OP 3 - Day Shift" /></label>
+        <label>Load snapshot
+          <select bind:value={selectedSnapshotId}>
+            <option value="">-- Select saved operation period --</option>
+            {#each operationSnapshots as snap}
+              <option value={snap.id}>{snap.name} ({snap.createdAt})</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+      <div class="panel-actions">
+        <button type="button" on:click={saveOperationSnapshot}>Save current operation period</button>
+        <button type="button" on:click={loadOperationSnapshot} disabled={!selectedSnapshotId}>Load selected operation period</button>
+      </div>
+      <p class="hint">Snapshots let you keep each operation period on file and quickly repopulate staffing from previous periods.</p>
     </section>
 
     <div class="org-two-col">
       <section class={`chart-wrap ${chartViewMode === 'portrait' ? 'chart-portrait' : 'chart-landscape'}`} aria-label="Organizational chart">
         <p class="chart-tip no-print">Tip: rotate your phone to landscape for a wider chart view.</p>
-        <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
-          <ul class="tree">
-            <OrgNode
-              node={orgChart}
-              selectedRoleId={selectedRoleId}
-              assignmentsByRole={assignmentsByRole}
-              contactsById={contactsById}
-              viewMode={chartViewMode}
-              on:selectrole={handleRoleSelect}
-            />
-          </ul>
-        </div>
+        {#if chartVisualization === 'tree'}
+          <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
+            <ul class="tree">
+              <OrgNode
+                node={orgChart}
+                selectedRoleId={selectedRoleId}
+                assignmentsByRole={assignmentsByRole}
+                contactsById={contactsById}
+                viewMode={chartViewMode}
+                on:selectrole={handleRoleSelect}
+              />
+            </ul>
+          </div>
+        {:else}
+          <div class="roster-board">
+            {#each roleList as role}
+              {@const contact = contactsById[assignmentsByRole[role.id]]}
+              <button type="button" class="roster-card" on:click={() => handleRoleSelect({ detail: { roleId: role.id } })}>
+                <strong>{role.name}</strong>
+                <span>{contact?.name || 'Vacant'}</span>
+                <span>{contact?.phone || ''}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </section>
 
       <aside class="role-panel no-print" aria-live="polite">
@@ -669,10 +807,12 @@
         {/if}
 
         <form class="assign-form" on:submit|preventDefault={saveRoleAssignment}>
-          <label>Name *<input bind:value={contactForm.name} required /></label>
+          <datalist id="master-contact-names">{#each masterContacts as contact}<option value={contact.name} />{/each}</datalist>
+          <datalist id="master-contact-emails">{#each masterContacts as contact}<option value={contact.email} />{/each}</datalist>
+          <label>Name *<input bind:value={contactForm.name} list="master-contact-names" on:input={handleNameInput} required /></label>
           <label>Agency<input bind:value={contactForm.agency} /></label>
           <label>Role/Title<input bind:value={contactForm.title} /></label>
-          <label>Email *<input type="email" bind:value={contactForm.email} required /></label>
+          <label>Email *<input type="email" bind:value={contactForm.email} list="master-contact-emails" on:input={handleEmailInput} required /></label>
           <label>Phone<input bind:value={contactForm.phone} /></label>
           <p class="hint">If email matches a master contact, this role uses that existing contact. Otherwise a new master contact is created.</p>
           <div class="panel-actions">
@@ -951,6 +1091,8 @@
   .view-toggle { display: inline-flex; border: 1px solid #b8c7dc; border-radius: 8px; overflow: hidden; }
   .view-toggle button { border: 0; background: #f8fbff; padding: .35rem .65rem; color: #12375f; }
   .view-toggle button.active { background: #1c73d3; color: #fff; }
+  .roster-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .5rem; }
+  .roster-card { text-align: left; border: 1px solid #9fb4cf; border-radius: 8px; background: #f8fbff; padding: .55rem; display: grid; gap: .2rem; }
   .google-sync, .ics-tools { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; margin-bottom: .8rem; background: #fbfdff; }
   .google-sync h2, .ics-tools h2 { margin: 0 0 .35rem; font-size: 1rem; }
   .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
