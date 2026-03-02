@@ -1,1387 +1,399 @@
 <script>
-  import Header from './Header.svelte';
-  import Stats from './Stats.svelte';
-  import ResumeSection from './ResumeSection.svelte';
-  import ChristmasLights from './ChristmasLights.svelte';
-  import data from './data.json';
+  import trainings from './trainings.json';
 
-  const profile = {
-    name: data.name,
-    title: data.title,
-    location: data.location,
-    linkedin: data.linkedin || '',
-    cvLink: data.cvLink || '',
-    photoSrc: './images/tommy-portrait.jpg',
-    photoAlt: data.name,
-    statement: data.statement
+  const easternIsoFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
+  const easternDateFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York' });
+  const today = easternIsoFormatter.format(new Date());
+  let query = '';
+  let selectedRegion = 'All';
+  let selectedMode = 'All';
+  let selectedDate = 'All dates';
+
+  let showRegistrationModal = false;
+  let intendedCourse = '';
+  let classSearch = '';
+
+  const counties = ['Adair', 'Boyd', 'Campbell', 'Fayette', 'Franklin', 'Jefferson', 'Perry', 'Rowan', 'Warren'];
+  const payOptions = ['No', 'Yes'];
+  const payers = ['Self', 'Agency', 'Grant', 'Other'];
+  const jobCategories = ['Emergency Management', 'Fire', 'Law Enforcement', 'Public Health', 'Healthcare', 'Public Works', 'Volunteer'];
+  const registrantTypes = ['County Official', 'Local EM', 'State Agency', 'Federal Partner', 'Nonprofit', 'Private Sector', 'Other'];
+
+  const emptyForm = {
+    firstName: '',
+    middleInitial: '',
+    lastName: '',
+    agency: '',
+    title: '',
+    phone: '',
+    cell: '',
+    email: '',
+    county: '',
+    beingPaid: '',
+    paidBy: '',
+    jobCategory: '',
+    registrantType: '',
+    selectedClassId: '',
+    accommodations: '',
+    ageConfirmed: '',
+    prereqAgreement: false
   };
 
-  const stats = data.stats;
-  const emergencyHighlights = data.emergencyHighlights;
-  const educationHighlights = data.educationHighlights;
-  const publicServiceHighlights = data.publicServiceHighlights;
-  const coreSkills = data.coreSkills;
-  const affiliations = data.affiliations;
-  const strava = data.strava || '';
-  const publications = data.publications || [];
-  const awards = data.awards || [];
-  const workExperience = data.workExperience || [];
-  const educationDegreesList = data.educationDegreesList || [];
-  const executiveEducation = data.executiveEducation || [];
-  const teachingInstitutions = data.teachingInstitutions || [];
-  const runningStartPhotos = data.runningStartPhotos || [];
-  const runningPhotos = data.runningPhotos || [];
+  let registrationForm = { ...emptyForm };
 
-  // Use local calendar dates (not UTC) so the count rolls over at local midnight
-  const streakStart = new Date(2018, 9, 15); // Oct 15, 2018 in local time (months are 0-indexed)
-  const _now = new Date();
-  const todayLocal = new Date(_now.getFullYear(), _now.getMonth(), _now.getDate());
-  const dayStreak = Math.floor((todayLocal - streakStart) / (1000 * 60 * 60 * 24));
+  const regions = ['All', ...new Set(trainings.map((t) => t.region))];
+  const modes = ['All', ...new Set(trainings.map((t) => t.mode))];
+  const allAvailableDates = ['All dates', ...new Set(trainings.map((t) => t.startDate).sort())];
 
-  const photos = [
-    { src: './images/05-sar-portrait-orange-field.jpg', alt: 'Tommy Adams in orange SAR Arc\'teryx jacket', caption: 'Wolfe County SAR' },
-    { src: './images/13-sar-highline-valley.jpg', alt: 'Tommy Adams smiling in helmet at highline over valley', caption: 'Highline Rigging — Red River Gorge' },
-  ];
+  const formatDate = (dateString) => {
+    const [y, m, d] = dateString.split('-').map(Number);
+    return easternDateFormatter.format(new Date(Date.UTC(y, m - 1, d, 12)));
+  };
+  const toICSDate = (dateString) => dateString.replaceAll('-', '');
+  const escapeICS = (value) => String(value).replaceAll('\\', '\\\\').replaceAll(';', '\\;').replaceAll(',', '\\,').replaceAll('\n', '\\n');
 
-  let lightboxSrc = '';
-  let lightboxAlt = '';
-
-  function openLightbox(src, alt) {
-    lightboxSrc = src;
-    lightboxAlt = alt;
+  function addDaysToIsoDate(isoDate, days) {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const localDate = new Date(y, m - 1, d);
+    localDate.setDate(localDate.getDate() + days);
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
-  function closeLightbox() {
-    lightboxSrc = '';
-    lightboxAlt = '';
+  function clearFilters() {
+    query = '';
+    selectedRegion = 'All';
+    selectedMode = 'All';
+    selectedDate = 'All dates';
   }
 
-  function handleLightboxKey(e) {
-    if (e.key === 'Escape') closeLightbox();
+  function buildEventDetails(training) {
+    return [
+      `Audience: ${training.audience}`,
+      `Delivery mode: ${training.mode}`,
+      `Region: ${training.region}`,
+      `Tuition: ${training.tuition}`,
+      `Other costs / notes: ${training.other}`,
+      `Registration status: ${training.registration}`
+    ].join('\n');
   }
 
-  function paragraphs(text) {
-    return text.split('\n\n');
+  function getCalendarUrls(training) {
+    const endExclusiveDate = addDaysToIsoDate(training.endDate, 1);
+
+    return {
+      google: `https://calendar.google.com/calendar/render?${new URLSearchParams({
+        action: 'TEMPLATE',
+        text: training.title,
+        dates: `${toICSDate(training.startDate)}/${toICSDate(endExclusiveDate)}`,
+        details: buildEventDetails(training),
+        location: training.location
+      }).toString()}`,
+      outlook: `https://outlook.office.com/calendar/0/deeplink/compose?${new URLSearchParams({
+        path: '/calendar/action/compose',
+        rru: 'addevent',
+        startdt: training.startDate,
+        enddt: endExclusiveDate,
+        subject: training.title,
+        body: buildEventDetails(training),
+        location: training.location,
+        allday: 'true'
+      }).toString()}`
+    };
   }
 
-  // ── EASTER EGG ─────────────────────────────────────────
-  let easterEggMode = false;
-  let showActivationOverlay = false;
-  let bgAudio = null;
+  function downloadICS(training) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const dtStart = toICSDate(training.startDate);
+    const dtEnd = toICSDate(addDaysToIsoDate(training.endDate, 1));
 
-  // Toggle body class reactively
-  $: if (typeof document !== 'undefined') {
-    document.body.classList.toggle('upside-down', easterEggMode);
+    const ics = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KYEM Mirror//Training Calendar//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:kyem-training-${training.id}@kyem-mirror.local`, `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${dtStart}`, `DTEND;VALUE=DATE:${dtEnd}`,
+      `SUMMARY:${escapeICS(training.title)}`,
+      `LOCATION:${escapeICS(training.location)}`,
+      `DESCRIPTION:${escapeICS(buildEventDetails(training))}`,
+      'END:VEVENT', 'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${training.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   }
 
-  function activateEasterEgg() {
-    if (easterEggMode) return;
-    // Audio must be created & played synchronously inside the gesture handler for iOS Safari
-    try {
-      bgAudio = new Audio('./audio/stranger-things.mp3');
-      bgAudio.loop = true;
-      bgAudio.volume = 0;
-      bgAudio.play().catch(() => {});
-      // Fade in over 2s
-      let vol = 0;
-      const fadeIn = setInterval(() => {
-        vol = Math.min(vol + 0.04, 0.85);
-        if (bgAudio) bgAudio.volume = vol;
-        if (vol >= 0.85) clearInterval(fadeIn);
-      }, 80);
-    } catch (e) {}
-    showActivationOverlay = true;
-    setTimeout(() => { easterEggMode = true; }, 600);
-    setTimeout(() => { showActivationOverlay = false; }, 3200);
+  function openRegistration(training) {
+    intendedCourse = `${training.title} (${formatDate(training.startDate)}-${formatDate(training.endDate)})`;
+    classSearch = '';
+    registrationForm = { ...emptyForm };
+    showRegistrationModal = true;
   }
 
-  function deactivateEasterEgg() {
-    easterEggMode = false;
-    if (bgAudio) {
-      // Fade out then stop
-      const audio = bgAudio;
-      const fadeOut = setInterval(() => {
-        audio.volume = Math.max(audio.volume - 0.06, 0);
-        if (audio.volume <= 0) { clearInterval(fadeOut); audio.pause(); audio.currentTime = 0; }
-      }, 50);
-      bgAudio = null;
-    }
+  function handleRegistrationSubmit() {
+    const selectedClass = trainings.find((t) => String(t.id) === registrationForm.selectedClassId);
+    const payload = {
+      ...registrationForm,
+      selectedClass: selectedClass ? `${selectedClass.title} - ${selectedClass.location}` : '',
+      submittedAtEastern: today
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kyem-registration-${registrationForm.lastName || 'draft'}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    showRegistrationModal = false;
   }
+
+  const inQuery = (training) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate].join(' ').toLowerCase().includes(q);
+  };
+
+  $: filtered = trainings.filter((training) => {
+    const regionMatch = selectedRegion === 'All' || training.region === selectedRegion;
+    const modeMatch = selectedMode === 'All' || training.mode === selectedMode;
+    const dateMatch = selectedDate === 'All dates' || training.startDate === selectedDate;
+    return regionMatch && modeMatch && dateMatch && inQuery(training);
+  });
+
+  $: searchableClassOptions = trainings.filter((training) => {
+    const q = classSearch.trim().toLowerCase();
+    return !q || `${training.title} ${training.location} ${training.startDate}`.toLowerCase().includes(q);
+  });
+
+  $: isFormValid =
+    registrationForm.firstName &&
+    registrationForm.lastName &&
+    registrationForm.agency &&
+    registrationForm.title &&
+    registrationForm.phone &&
+    registrationForm.email &&
+    registrationForm.county &&
+    registrationForm.beingPaid &&
+    registrationForm.jobCategory &&
+    registrationForm.registrantType &&
+    registrationForm.selectedClassId &&
+    registrationForm.ageConfirmed &&
+    registrationForm.prereqAgreement;
 </script>
 
-{#if showActivationOverlay}
-  <div class="ud-intro" aria-live="polite">
-    <div class="ud-particles" aria-hidden="true">
-      {#each Array(18) as _, i}
-        <div class="ud-particle" style="left:{(i/18*100).toFixed(1)}%; animation-delay:{(i*0.17).toFixed(2)}s; animation-duration:{(3+i%4).toFixed(1)}s"></div>
-      {/each}
-    </div>
-    <p class="ud-welcome">WELCOME TO THE</p>
-    <p class="ud-title">UPSIDE DOWN</p>
-    <p class="ud-sub">.... resume</p>
-  </div>
-{/if}
+<a class="skip-link" href="#results">Skip to training results</a>
 
-{#if easterEggMode}
-  <div class="scanlines" aria-hidden="true"></div>
-  <button class="return-btn" on:click={deactivateEasterEgg} aria-label="Return to normal view">
-    ← Right-Side Up
-  </button>
-  <div class="lights-fixed" aria-hidden="true">
-    <ChristmasLights />
-  </div>
-{/if}
+<main class="layout">
+  <header>
+    <p class="eyebrow">UNOFFICIAL PROTOTYPE</p>
+    <h1>Kentucky Emergency Management Training Calendar</h1>
+    <p class="intro">Integrated training and registration prototype with ADA-focused form structure.</p>
+    <p class="intro-note">This prototype replaces the legacy look/feel by keeping the registration fields in an accessible in-app dialog connected directly to the selected training workflow.</p>
+  </header>
 
-<div class="container" class:ud-flipped={easterEggMode}>
-  <Header
-    name={profile.name}
-    title={profile.title}
-    location={profile.location}
-    linkedin={profile.linkedin}
-    cvLink={profile.cvLink}
-    photoSrc={profile.photoSrc}
-    photoAlt={profile.photoAlt}
-  />
+  <section class="controls" aria-label="Filter trainings">
+    <label>Search<input bind:value={query} placeholder="Search by course, audience, location, notes, or date" /></label>
+    <label>Region<select bind:value={selectedRegion}>{#each regions as region}<option value={region}>{region}</option>{/each}</select></label>
+    <label>Delivery mode<select bind:value={selectedMode}>{#each modes as mode}<option value={mode}>{mode}</option>{/each}</select></label>
+    <label>Start date<select bind:value={selectedDate}>{#each allAvailableDates as date}<option value={date}>{date === 'All dates' ? date : formatDate(date)}</option>{/each}</select></label>
+  </section>
 
-  <div class="profile">
-    {#each paragraphs(profile.statement) as para}
-      <p>{para}</p>
+  <div class="dates-row">
+    {#each allAvailableDates.slice(1) as date}
+      <button class:selected={selectedDate === date} on:click={() => (selectedDate = date)}>{formatDate(date)}</button>
     {/each}
+    <button on:click={clearFilters}>Show all</button>
   </div>
 
-  <Stats {stats} />
+  <p class="summary" role="status" aria-live="polite">Showing {filtered.length} of {trainings.length} trainings · Updated {formatDate(today)} (Eastern)</p>
 
-  <div class="photo-mosaic">
-    {#each photos as photo}
-      <div class="photo-cell" on:click={() => openLightbox(photo.src, photo.alt)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox(photo.src, photo.alt)}>
-        <img src={photo.src} alt={photo.alt} loading="lazy" style={photo.objectPosition ? `object-position: ${photo.objectPosition}` : ''} />
-        <div class="photo-caption">{photo.caption}</div>
-      </div>
-    {/each}
-  </div>
-
-  {#if lightboxSrc}
-    <div class="lightbox" on:click={closeLightbox} on:keydown={handleLightboxKey} role="dialog" aria-modal="true" tabindex="-1">
-      <button class="lightbox-close" on:click={closeLightbox} aria-label="Close">✕</button>
-      <img src={lightboxSrc} alt={lightboxAlt} on:click|stopPropagation />
-    </div>
-  {/if}
-
-  <div class="content">
-
-    <ResumeSection icon="🚨" title="Emergency Management / Search & Rescue" highlights={emergencyHighlights}>
-      <div class="sar-banner" on:click={() => openLightbox('./images/07-sar-cliff-edge-fog.jpg', 'Tommy Adams at cliff edge overlooking fog-filled valley during SAR operation')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/07-sar-cliff-edge-fog.jpg', 'Tommy Adams at cliff edge overlooking fog-filled valley during SAR operation')}>
-        <img src="./images/07-sar-cliff-edge-fog.jpg" alt="Tommy Adams at cliff edge overlooking fog-filled valley during SAR operation" loading="lazy" />
-        <div class="sar-banner-caption">Cliff rescue operations — Red River Gorge area</div>
-      </div>
-      {#each paragraphs(data.emergencyContent) as para}
-        <p>{para}</p>
-      {/each}
-      <div class="thumb-row">
-        {#if data.sarTeamPhoto}
-          <div class="thumb-cell" on:click={() => openLightbox('./images/' + data.sarTeamPhoto, data.sarTeamPhotoAlt || 'WCSAR Water Rescue')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/' + data.sarTeamPhoto, data.sarTeamPhotoAlt || 'WCSAR Water Rescue')}>
-            <img src="./images/{data.sarTeamPhoto}" alt={data.sarTeamPhotoAlt || 'WCSAR Water Rescue'} loading="lazy" style="object-position: center 30%" />
-            <div class="thumb-caption">{data.sarTeamPhotoAlt || 'WCSAR Water Rescue'}</div>
-          </div>
+  <section id="results" class="table-wrap" aria-label="Training results">
+    <table>
+      <caption class="sr-only">KYEM training results with registration and calendar actions</caption>
+      <thead>
+        <tr><th scope="col">Course</th><th scope="col">Dates</th><th scope="col">Region</th><th scope="col">Location</th><th scope="col">Tuition</th><th scope="col">Other costs / notes</th><th scope="col">Status</th><th scope="col">Registration</th><th scope="col">Calendar</th></tr>
+      </thead>
+      <tbody>
+        {#if filtered.length === 0}
+          <tr><td colspan="9" class="empty">No matching trainings found.</td></tr>
+        {:else}
+          {#each filtered as t}
+            <tr>
+              <td data-label="Course"><strong>{t.title}</strong><div class="meta">{t.audience} · {t.mode}</div></td>
+              <td data-label="Dates">{formatDate(t.startDate)}–{formatDate(t.endDate)}</td>
+              <td data-label="Region">{t.region}</td>
+              <td data-label="Location">{t.location}</td>
+              <td data-label="Tuition">{t.tuition}</td>
+              <td data-label="Other costs / notes">{t.other}</td>
+              <td data-label="Status"><span class="badge">{t.registration}</span></td>
+              <td data-label="Registration"><button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button></td>
+              <td data-label="Calendar">
+                <details class="calendar-nested">
+                  <summary class="calendar-summary">Add to calendar</summary>
+                  <div class="calendar-menu">
+                    <button type="button" class="calendar-btn apple" on:click={() => downloadICS(t)}> Apple (.ics)</button>
+                    <a class="calendar-btn google" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer">G Google</a>
+                    <a class="calendar-btn outlook" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer">O Outlook</a>
+                  </div>
+                </details>
+              </td>
+            </tr>
+          {/each}
         {/if}
-        {#if data.wolfeCountySarPhoto}
-          <div class="thumb-cell" on:click={() => openLightbox('./images/' + data.wolfeCountySarPhoto, data.wolfeCountySarPhotoAlt || 'Wolfe County SAR')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/' + data.wolfeCountySarPhoto, data.wolfeCountySarPhotoAlt || 'Wolfe County SAR')}>
-            <img src="./images/{data.wolfeCountySarPhoto}" alt={data.wolfeCountySarPhotoAlt || 'Wolfe County SAR'} loading="lazy" />
-            <div class="thumb-caption">{data.wolfeCountySarPhotoAlt || 'Wolfe County SAR'}</div>
-          </div>
-        {/if}
-        <div class="thumb-cell" on:click={() => openLightbox('./images/12-sar-rappel-sandstone.jpg', 'Tommy Adams rappelling sandstone cliff')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/12-sar-rappel-sandstone.jpg', 'Tommy Adams rappelling sandstone cliff')}>
-          <img src="./images/12-sar-rappel-sandstone.jpg" alt="Tommy Adams rappelling sandstone cliff" loading="lazy" />
-          <div class="thumb-caption">Technical Rope Rescue</div>
-        </div>
-      </div>
-    </ResumeSection>
+      </tbody>
+    </table>
+  </section>
+</main>
 
-    <ResumeSection icon="🎓" title="Teaching & Communication" highlights={educationHighlights}>
-      <div class="classroom-banner" on:click={() => openLightbox('./images/10-classroom-professor.png', 'Tommy Adams in the classroom')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/10-classroom-professor.png', 'Tommy Adams in the classroom')}>
-        <img src="./images/10-classroom-professor.png" alt="Tommy Adams in the classroom" loading="lazy" />
-        <div class="classroom-banner-caption">17+ years shaping communicators — across 10+ universities</div>
-      </div>
-      {#each paragraphs(data.educationContent) as para}
-        <p>{para}</p>
-      {/each}
-      {#if teachingInstitutions.length > 0}
-        <div class="teaching-grid-label">Institutions taught at</div>
-        <div class="teaching-grid">
-          {#each teachingInstitutions as inst}
-            <div class="teaching-card">{inst}</div>
+{#if showRegistrationModal}
+  <div class="modal-backdrop" role="presentation" on:click={() => (showRegistrationModal = false)}></div>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title" aria-describedby="registration-modal-desc">
+    <button type="button" class="close-modal" aria-label="Close registration dialog" on:click={() => (showRegistrationModal = false)}>×</button>
+    <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
+    <p>You clicked: <strong>{intendedCourse}</strong></p>
+    <p id="registration-modal-desc" class="warning">Class is intentionally not prefilled. Search and select from the class list below.</p>
+
+    <form class="reg-grid" on:submit|preventDefault={handleRegistrationSubmit}>
+      <label>First Name *<input bind:value={registrationForm.firstName} required /></label>
+      <label>MI<input maxlength="1" bind:value={registrationForm.middleInitial} /></label>
+      <label>Last Name *<input bind:value={registrationForm.lastName} required /></label>
+
+      <label>Agency *<input bind:value={registrationForm.agency} required /></label>
+      <label>Title *<input bind:value={registrationForm.title} required /></label>
+
+      <label>Phone *<input bind:value={registrationForm.phone} required /></label>
+      <label>Cell<input bind:value={registrationForm.cell} /></label>
+
+      <label>Email *<input type="email" bind:value={registrationForm.email} required /></label>
+      <label>County *
+        <select bind:value={registrationForm.county} required>
+          <option value="">-- Please select --</option>
+          {#each counties as c}<option value={c}>{c}</option>{/each}
+        </select>
+      </label>
+
+      <label>Being paid to attend? *
+        <select bind:value={registrationForm.beingPaid} required>
+          <option value="">-- Please select --</option>
+          {#each payOptions as opt}<option value={opt}>{opt}</option>{/each}
+        </select>
+      </label>
+
+      <label>If paid, by whom?
+        <select bind:value={registrationForm.paidBy}>
+          <option value="">-- Please select --</option>
+          {#each payers as p}<option value={p}>{p}</option>{/each}
+        </select>
+      </label>
+
+      <label>Job category *
+        <select bind:value={registrationForm.jobCategory} required>
+          <option value="">-- Please select --</option>
+          {#each jobCategories as j}<option value={j}>{j}</option>{/each}
+        </select>
+      </label>
+
+      <label>Registrant type *
+        <select bind:value={registrationForm.registrantType} required>
+          <option value="">-- Please select --</option>
+          {#each registrantTypes as r}<option value={r}>{r}</option>{/each}
+        </select>
+      </label>
+
+      <label class="full">Search classes<input bind:value={classSearch} placeholder="Type course, county, or date" /></label>
+      <label class="full">Choose class *
+        <select bind:value={registrationForm.selectedClassId} required>
+          <option value="">-- Select class from search results --</option>
+          {#each searchableClassOptions as t}
+            <option value={String(t.id)}>{formatDate(t.startDate)} — {t.title}, {t.location}</option>
           {/each}
-        </div>
-      {/if}
-      {#if educationDegreesList.length > 0}
-        <div class="degrees-label">Academic Degrees</div>
-        <div class="degrees">
-          {#each educationDegreesList as d}
-            <div class="degree-card">
-              <span class="degree-label">{d.degree}</span>
-              <span class="degree-field">{d.field}</span>
-              <span class="degree-inst">{d.institution}</span>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </ResumeSection>
+        </select>
+      </label>
 
-    {#if executiveEducation.length > 0}
-    <ResumeSection icon="📋" title="Recent & Upcoming Training, Certification & Continuing Education">
-      <div class="exec-ed-list">
-        {#each executiveEducation as ed}
-          <div class="exec-ed-card" class:upcoming={ed.status === 'upcoming'}>
-            {#if ed.status === 'upcoming'}
-              <span class="exec-ed-badge upcoming-badge">Upcoming</span>
-            {/if}
-            <div class="exec-ed-top">
-              <span class="exec-ed-program">{ed.program}</span>
-              {#if ed.status !== 'upcoming'}
-                <span class="exec-ed-year">{ed.year}</span>
-              {/if}
-            </div>
-            <div class="exec-ed-inst">{ed.institution}{ed.status === 'upcoming' ? ` — ${ed.year}` : ''}</div>
-            {#if ed.photo}
-              <div class="exec-ed-photo-wrap" on:click={() => openLightbox('./images/' + ed.photo, ed.photoAlt || ed.program)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/' + ed.photo, ed.photoAlt || ed.program)}>
-                <img class="exec-ed-photo" src="./images/{ed.photo}" alt={ed.photoAlt || ed.program} loading="lazy" />
-              </div>
-            {/if}
-          </div>
-        {/each}
+      <label class="full">Special accommodations / accessibility needs
+        <textarea rows="4" bind:value={registrationForm.accommodations}></textarea>
+      </label>
+
+      <fieldset class="full inline">
+        <legend>Age *</legend>
+        <label><input type="radio" bind:group={registrationForm.ageConfirmed} value="over18" required /> I am over the age of 18.</label>
+        <label><input type="radio" bind:group={registrationForm.ageConfirmed} value="under18" required /> I am under the age of 18.</label>
+      </fieldset>
+
+      <label class="full checkbox"><input type="checkbox" bind:checked={registrationForm.prereqAgreement} /> I agree to provide prerequisites and confirm information is accurate. *</label>
+
+      <div class="modal-actions full">
+        <button type="button" on:click={() => (showRegistrationModal = false)}>Cancel</button>
+        <button type="submit" class="primary" disabled={!isFormValid}>Submit registration draft</button>
       </div>
-    </ResumeSection>
-    {/if}
-
-    <ResumeSection icon="🤝" title="Nonprofit & Public Service Leadership" highlights={publicServiceHighlights}>
-      {#each paragraphs(data.publicServiceContent) as para}
-        <p>{para}</p>
-      {/each}
-    </ResumeSection>
-
-    <ResumeSection icon="💼" title="Work Experience">
-      {#each workExperience as job}
-        <div class="job">
-          <div class="job-header">
-            <div class="job-title-wrap">
-              <span class="job-title">{job.title}</span>
-              <span class="job-org">{job.org}</span>
-            </div>
-            <span class="job-dates">{job.dates}</span>
-          </div>
-          <ul class="job-bullets">
-            {#each job.bullets as bullet}
-              <li>{bullet}</li>
-            {/each}
-          </ul>
-        </div>
-      {/each}
-    </ResumeSection>
-
-    {#if publications.length > 0}
-    <ResumeSection icon="📚" title="Publications & Scholarship">
-      <div class="pub-list">
-        {#each publications as pub}
-          <div class="pub-item">
-            <div class="pub-title">"{pub.title}"</div>
-            <div class="pub-meta">{pub.role} · {pub.publisher} · {pub.year}</div>
-            {#if pub.award}
-              <div class="pub-award">🏆 {pub.award}</div>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </ResumeSection>
-    {/if}
-
-    {#if awards.length > 0}
-    <ResumeSection icon="🏆" title="Awards & Recognition">
-      <ul class="awards-list">
-        {#each awards as award}
-          <li>{award}</li>
-        {/each}
-      </ul>
-    </ResumeSection>
-    {/if}
-
-    <ResumeSection icon="🏃" title="Personal Excellence & Global Perspective">
-      <p><strong>Running Every Single Day Since October 2018:</strong> <span class="streak-count">{dayStreak.toLocaleString()}</span> consecutive days without missing a single one. This daily commitment reflects the discipline, resilience, and iterative refinement process I bring to every aspect of my life and work. {#if strava}<a class="strava-link" href={strava} target="_blank" rel="noopener noreferrer">Follow on Strava →</a>{/if}</p>
-      <p><strong>Globally-Minded Traveler:</strong> Visited 30+ countries across six continents including Italy, UK, Germany, France, China, Japan, Thailand, Australia, Brazil, New Zealand, and many others. Studied abroad in Florence, Italy (Pepperdine University International Programs) and taught in Shanghai, China as Visiting Professor.</p>
-      {#if runningPhotos.length > 0}
-        <div class="running-banner-list">
-          {#each runningPhotos as photo}
-            <div class="running-banner-item" on:click={() => openLightbox('./images/' + encodeURIComponent(photo.file), photo.alt)} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/' + encodeURIComponent(photo.file), photo.alt)}>
-              <img src="./images/{encodeURIComponent(photo.file)}" alt={photo.alt} loading="lazy" />
-              {#if photo.caption}
-                <div class="running-banner-caption">{photo.caption}</div>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </ResumeSection>
-
-    <ResumeSection icon="🌱" title="Community Service & Volunteer Work">
-      <p>Active volunteer and mentor with <strong>A Running Start</strong> (2021–Present), a nonprofit supporting young runners. Founder of campus run clubs at multiple institutions. Advisor to student organizations, judge for business pitch competitions, and extensive committee service across academic and community organizations.</p>
-      <p>Member of Wolfe County Search & Rescue since 2021 — contributing not only as a field responder but as an officer, treasurer, and finance officer supporting the organizational health of the team.</p>
-      {#if runningStartPhotos.length > 0}
-        <div class="running-start-label">A Running Start</div>
-        <div class="thumb-row">
-          {#each runningStartPhotos as photo}
-            <div class="thumb-cell" on:click={() => openLightbox('./images/' + encodeURIComponent(photo.file), photo.alt || 'A Running Start')} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openLightbox('./images/' + encodeURIComponent(photo.file), photo.alt || 'A Running Start')}>
-              <img src="./images/{encodeURIComponent(photo.file)}" alt={photo.alt || 'A Running Start'} loading="lazy" />
-              {#if photo.caption}<div class="thumb-caption">{photo.caption}</div>{/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </ResumeSection>
-
-    <ResumeSection icon="⚡" title="Core Competencies & Certifications" skills={coreSkills} collapsible={true}>
-      {#each paragraphs(data.certificationsContent) as para}
-        <p>{para}</p>
-      {/each}
-    </ResumeSection>
-
-    <ResumeSection icon="🏢" title="Professional Affiliations" orgs={affiliations} collapsible={true}>
-    </ResumeSection>
-
-  </div>
-
-  <div class="footer-photo" class:footer-upside-down={easterEggMode} on:click={activateEasterEgg} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && activateEasterEgg()} title={easterEggMode ? 'You found the Upside Down' : ''}>
-    <img src="./images/08-ridge-run-sunset.jpg" alt="Tommy Adams looking off into the distance at sunset on a Kentucky ridge" loading="lazy" />
-    {#if easterEggMode}
-      <div class="footer-found-label">// you found it //</div>
-    {/if}
-  </div>
-</div>
+    </form>
+  </section>
+{/if}
 
 <style>
-  .container {
-    max-width: 850px;
-    margin: 0 auto;
-    background: white;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
-    border-radius: 6px;
-    overflow: hidden;
-    transition: transform 0.9s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .ud-flipped {
-    transform: rotate(180deg);
-  }
-
-  .lights-fixed {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9980;
-    pointer-events: none;
-  }
-
-  .profile {
-    padding: 35px 40px;
-    background: #faf8f5;
-    border-bottom: 2px solid #4a7c6b;
-  }
-
-  .profile p {
-    font-size: 1em;
-    color: #2d3a35;
-    text-align: left;
-    line-height: 1.75;
-    margin: 0 0 12px;
-  }
-
-  .profile p:last-child {
-    margin-bottom: 0;
-  }
-
-  /* Footer panoramic photo */
-  .footer-photo {
-    overflow: hidden;
-    cursor: zoom-in;
-  }
-
-  .footer-photo img {
-    width: 100%;
-    height: auto;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  .footer-photo:hover img {
-    transform: scale(1.02);
-  }
-
-  /* Photo mosaic — 2 photos side by side */
-  .photo-mosaic {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 480px;
-    gap: 3px;
-    background: #1e3a2f;
-  }
-
-  .photo-cell {
-    overflow: hidden;
-    background: #e8e2d8;
-    position: relative;
-    cursor: zoom-in;
-  }
-
-  .photo-cell img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  .photo-cell:hover img {
-    transform: scale(1.04);
-  }
-
-  .photo-caption {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.72));
-    color: white;
-    padding: 24px 12px 10px;
-    font-size: 0.78em;
-    font-style: italic;
-    letter-spacing: 0.3px;
-    opacity: 0;
-    transform: translateY(6px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-  }
-
-  .photo-cell:hover .photo-caption {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  @media (hover: none) {
-    .photo-caption { opacity: 1; transform: none; }
-  }
-
-  .content {
-    padding: 40px;
-  }
-
-  /* Pass paragraph spacing into section slots */
-  .content :global(p) {
-    margin-bottom: 12px;
-  }
-
-  .content :global(p:last-child) {
-    margin-bottom: 0;
-  }
-
-  /* SAR action banner */
-  .sar-banner {
-    margin-bottom: 20px;
-    border-radius: 4px;
-    overflow: hidden;
-    position: relative;
-    cursor: zoom-in;
-  }
-
-  .sar-banner img {
-    width: 100%;
-    height: 300px;
-    object-fit: cover;
-    object-position: center 30%;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  .sar-banner:hover img {
-    transform: scale(1.02);
-  }
-
-  .sar-banner-caption {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.6));
-    color: white;
-    padding: 28px 18px 12px;
-    font-size: 0.85em;
-    font-style: italic;
-    letter-spacing: 0.3px;
-  }
-
-
-  @media (max-width: 768px) {
-    .content { padding: 25px 18px; }
-    .profile { padding: 25px 18px; }
-    .sar-banner img { height: 220px; }
-    .teaching-grid { grid-template-columns: repeat(2, 1fr); }
-    .photo-mosaic { grid-template-rows: 320px; }
-  }
-
-  @media (max-width: 400px) {
-    .content { padding: 20px 15px; }
-    .profile { padding: 20px 15px; }
-    .photo-mosaic { grid-template-rows: 240px; }
-    .sar-banner img { height: 180px; }
-  }
-
-  /* Work experience */
-  .job {
-    margin-bottom: 28px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid #e8e2d8;
-  }
-
-  .job:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .job-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-
-  .job-title-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .job-title {
-    font-weight: 700;
-    color: #1e3a2f;
-    font-size: 1em;
-    line-height: 1.3;
-  }
-
-  .job-org {
-    font-size: 0.9em;
-    color: #4a7c6b;
-    font-weight: 600;
-  }
-
-  .job-dates {
-    font-size: 0.85em;
-    color: #7a8a84;
-    white-space: nowrap;
-    padding-top: 2px;
-  }
-
-  .job-bullets {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .job-bullets li {
-    padding: 5px 0 5px 22px;
-    position: relative;
-    font-size: 0.95em;
-    color: #34403b;
-    line-height: 1.6;
-  }
-
-  .job-bullets li::before {
-    content: "•";
-    position: absolute;
-    left: 6px;
-    color: #4a7c6b;
-  }
-
-  /* Degrees */
-  .degrees {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 22px;
-  }
-
-  .degree-card {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    background: #f5f2ec;
-    border-left: 3px solid #4a7c6b;
-    padding: 10px 16px;
-    border-radius: 0 4px 4px 0;
-  }
-
-  .degree-label {
-    font-weight: 700;
-    color: #1e3a2f;
-    font-size: 0.9em;
-    min-width: 120px;
-    flex-shrink: 0;
-  }
-
-  .degree-field {
-    color: #34403b;
-    font-size: 0.9em;
-    flex: 1;
-  }
-
-  .degree-inst {
-    font-size: 0.85em;
-    color: #4a7c6b;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  /* Classroom banner */
-  .classroom-banner {
-    margin-bottom: 22px;
-    border-radius: 4px;
-    overflow: hidden;
-    position: relative;
-    cursor: zoom-in;
-  }
-
-  .classroom-banner img {
-    width: 100%;
-    height: 420px;
-    object-fit: cover;
-    object-position: center 8%;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  .classroom-banner:hover img {
-    transform: scale(1.02);
-  }
-
-  .classroom-banner-caption {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.65));
-    color: white;
-    padding: 28px 18px 12px;
-    font-size: 0.85em;
-    font-style: italic;
-    letter-spacing: 0.3px;
-  }
-
-  @media (max-width: 768px) {
-    .classroom-banner img { height: auto; }
-  }
-
-  /* Teaching grid */
-  .teaching-grid-label {
-    font-size: 0.75em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: #4a7c6b;
-    margin-top: 22px;
-    margin-bottom: 10px;
-  }
-
-  .teaching-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 8px;
-    margin-bottom: 28px;
-  }
-
-  .teaching-card {
-    background: #f0f6f3;
-    border-left: 3px solid #4a7c6b;
-    padding: 10px 14px;
-    font-size: 0.88em;
-    font-weight: 600;
-    color: #1e3a2f;
-    border-radius: 0 4px 4px 0;
-  }
-
-  /* Degrees sub-section */
-  .degrees-label {
-    font-size: 0.75em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: #4a7c6b;
-    margin-top: 24px;
-    margin-bottom: 10px;
-  }
-
-  /* Executive Education */
-  .exec-ed-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 4px;
-  }
-
-  .exec-ed-card {
-    background: #f0f6f3;
-    border-left: 3px solid #4a7c6b;
-    padding: 12px 16px;
-    border-radius: 0 4px 4px 0;
-  }
-
-  .exec-ed-card.upcoming {
-    background: #fdf8ee;
-    border-left-color: #c8a45c;
-  }
-
-  .exec-ed-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 4px;
-  }
-
-  .exec-ed-program {
-    font-weight: 700;
-    color: #1e3a2f;
-    font-size: 0.95em;
-    line-height: 1.4;
-    flex: 1;
-  }
-
-  .exec-ed-year {
-    font-size: 0.82em;
-    color: #7a8a84;
-    white-space: nowrap;
-    padding-top: 2px;
-    flex-shrink: 0;
-  }
-
-  .upcoming-badge {
-    font-size: 0.72em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: #8a6a1a;
-    background: #fdf5dc;
-    border: 1px solid #e8d898;
-    padding: 2px 8px;
-    border-radius: 3px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .exec-ed-inst {
-    font-size: 0.85em;
-    color: #4a7c6b;
-    font-weight: 500;
-  }
-
-  .exec-ed-card.upcoming .exec-ed-inst {
-    color: #8a6a1a;
-  }
-
-  .exec-ed-photo-wrap {
-    cursor: zoom-in;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-top: 12px;
-  }
-
-  .exec-ed-photo-wrap:hover .exec-ed-photo {
-    transform: scale(1.02);
-  }
-
-  .exec-ed-photo {
-    width: 100%;
-    height: 430px;
-    object-fit: cover;
-    object-position: center 30%;
-    border-radius: 4px;
-    margin-top: 0;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  /* Shared clickable thumbnail row (SAR + Running Start) */
-  .thumb-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-top: 20px;
-  }
-
-  .thumb-cell {
-    position: relative;
-    overflow: hidden;
-    border-radius: 6px;
-    cursor: zoom-in;
-  }
-
-  .thumb-cell img {
-    width: 100%;
-    aspect-ratio: 4/3;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.3s ease;
-  }
-
-  .thumb-cell:hover img {
-    transform: scale(1.04);
-  }
-
-  .thumb-caption {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.68));
-    color: white;
-    padding: 22px 10px 8px;
-    font-size: 0.74em;
-    font-style: italic;
-    letter-spacing: 0.3px;
-    opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.3s, transform 0.3s;
-  }
-
-  .thumb-cell:hover .thumb-caption {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  @media (hover: none) {
-    .thumb-caption { opacity: 1; transform: none; }
-  }
-
-  @media (max-width: 500px) {
-    .thumb-row { grid-template-columns: 1fr; }
-  }
-
-  /* Full-width running photo banner */
-  .running-banner-list {
-    margin-top: 20px;
-  }
-
-  .running-banner-item {
-    position: relative;
-    width: 100%;
-    border-radius: 6px;
-    overflow: hidden;
-    margin-bottom: 12px;
-    cursor: zoom-in;
-  }
-
-  .running-banner-item img {
-    width: 100%;
-    height: 380px;
-    object-fit: cover;
-    object-position: center 30%;
-    display: block;
-    transition: transform 0.4s ease;
-  }
-
-  .running-banner-item:hover img {
-    transform: scale(1.02);
-  }
-
-  .running-banner-caption {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.6));
-    color: white;
-    padding: 28px 18px 12px;
-    font-size: 0.85em;
-    font-style: italic;
-    letter-spacing: 0.3px;
-  }
-
-  @media (max-width: 768px) {
-    .running-banner-item img { height: 240px; }
-  }
-
-
-  .streak-count {
-    font-size: 1.15em;
-    font-weight: 700;
-    color: #1e3a2f;
-  }
-
-  .strava-link {
-    color: #fc4c02;
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .strava-link:hover {
-    text-decoration: underline;
-  }
-
-  /* Publications */
-  .pub-list {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  .pub-item {
-    background: #faf8f5;
-    border: 1px solid #e0d9cf;
-    border-radius: 4px;
-    padding: 16px 20px;
-  }
-
-  .pub-title {
-    font-weight: 700;
-    color: #1e3a2f;
-    font-size: 1em;
-    margin-bottom: 4px;
-  }
-
-  .pub-meta {
-    font-size: 0.88em;
-    color: #7a8a84;
-    margin-bottom: 6px;
-  }
-
-  .pub-award {
-    font-size: 0.88em;
-    color: #8a6a1a;
-    font-weight: 600;
-    background: #fdf5dc;
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 3px;
-    border: 1px solid #e8d898;
-  }
-
-  /* Awards */
-  .awards-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .awards-list li {
-    padding: 10px 16px 10px 44px;
-    position: relative;
-    background: #faf8f5;
-    border-radius: 4px;
-    color: #2d3a35;
-    font-size: 0.95em;
-    border: 1px solid #e0d9cf;
-  }
-
-  .awards-list li::before {
-    content: "🏆";
-    position: absolute;
-    left: 12px;
-    top: 10px;
-  }
-
-  @media (max-width: 768px) {
-    .job-header { flex-direction: column; gap: 4px; }
-    .job-dates { font-size: 0.82em; }
-    .degree-card { flex-direction: column; gap: 4px; }
-    .degree-label { min-width: unset; }
-    .degree-inst { white-space: normal; }
-    .exec-ed-photo { height: auto; object-position: center center; }
-  }
-
-  @media print {
-    .container {
-      box-shadow: none;
-      max-width: 100%;
-      border-radius: 0;
-    }
-  }
-
-  /* Photo mosaic — clickable cursor */
-  .photo-cell {
-    cursor: zoom-in;
-  }
-
-  /* Lightbox */
-  .lightbox {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.92);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 20px;
-    cursor: zoom-out;
-  }
-
-  .lightbox img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    border-radius: 4px;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-    cursor: default;
-  }
-
-  .lightbox-close {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    background: none;
-    border: none;
-    color: white;
-    font-size: 1.6rem;
-    line-height: 1;
-    cursor: pointer;
-    opacity: 0.8;
-    padding: 4px 8px;
-  }
-
-  .lightbox-close:hover {
-    opacity: 1;
-  }
-
-  /* Running Start group label */
-  .running-start-label {
-    font-size: 0.75em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: #4a7c6b;
-    margin-top: 20px;
-    margin-bottom: 10px;
-  }
-
-  /* ════════════════════════════════════════════════════════
-     UPSIDE DOWN EASTER EGG THEME
-     ════════════════════════════════════════════════════════ */
-
-  /* Activation intro overlay */
-  .ud-intro {
-    position: fixed;
-    inset: 0;
-    background: #000;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    animation: udIntroAnim 3.2s ease-in-out forwards;
-    overflow: hidden;
-  }
-
-  @keyframes udIntroAnim {
-    0%   { opacity: 0; }
-    8%   { opacity: 1; }
-    78%  { opacity: 1; }
-    100% { opacity: 0; pointer-events: none; }
-  }
-
-  .ud-particles {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .ud-particle {
-    position: absolute;
-    bottom: -10px;
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: #ff2d2d;
-    opacity: 0.7;
-    animation: floatUp linear infinite;
-  }
-
-  @keyframes floatUp {
-    0%   { transform: translateY(0) scale(1); opacity: 0.7; }
-    100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
-  }
-
-  .ud-welcome {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: clamp(0.9em, 3vw, 1.4em);
-    color: #ff2d2d;
-    text-transform: uppercase;
-    letter-spacing: 8px;
-    margin: 0 0 10px;
-    text-shadow: 0 0 18px rgba(255, 45, 45, 0.9), 0 0 40px rgba(255, 0, 0, 0.4);
-    opacity: 0;
-    animation: textReveal 3.2s ease forwards;
-    animation-delay: 0.3s;
-  }
-
-  .ud-title {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: clamp(2em, 8vw, 4em);
-    font-weight: 900;
-    color: #ff2d2d;
-    text-transform: uppercase;
-    letter-spacing: 6px;
-    margin: 0 0 18px;
-    text-shadow: 0 0 24px rgba(255, 45, 45, 1), 0 0 60px rgba(255, 0, 0, 0.5), 0 0 100px rgba(180, 0, 0, 0.3);
-    opacity: 0;
-    animation: textReveal 3.2s ease forwards;
-    animation-delay: 0.65s;
-  }
-
-  .ud-sub {
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 1.3em;
-    color: #ff6666;
-    letter-spacing: 10px;
-    margin: 0;
-    opacity: 0;
-    animation: textReveal 3.2s ease forwards;
-    animation-delay: 1s;
-    text-shadow: 0 0 10px rgba(255, 45, 45, 0.7);
-  }
-
-  @keyframes textReveal {
-    0%   { opacity: 0; transform: scale(0.85) translateY(8px); }
-    15%  { opacity: 1; transform: scale(1) translateY(0); }
-    78%  { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
-  /* CRT scanlines overlay */
-  .scanlines {
-    position: fixed;
-    inset: 0;
-    z-index: 9990;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      transparent,
-      transparent 3px,
-      rgba(0, 0, 0, 0.18) 3px,
-      rgba(0, 0, 0, 0.18) 4px
-    );
-  }
-
-  /* Return button */
-  .return-btn {
-    position: fixed;
-    top: 14px;
-    right: 14px;
-    z-index: 9995;
-    background: #1a0000;
-    color: #ff4444;
-    border: 1px solid #8b0000;
-    padding: 8px 16px;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.82em;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    border-radius: 3px;
-    text-shadow: 0 0 8px rgba(255, 68, 68, 0.7);
-    box-shadow: 0 0 12px rgba(180, 0, 0, 0.4);
-    transition: background 0.2s, box-shadow 0.2s;
-  }
-
-  .return-btn:hover {
-    background: #2a0000;
-    box-shadow: 0 0 20px rgba(255, 45, 45, 0.5);
-  }
-
-  /* Footer found label */
-  .footer-found-label {
-    position: absolute;
-    bottom: 16px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 0.9em;
-    color: #ff4444;
-    letter-spacing: 4px;
-    text-shadow: 0 0 12px rgba(255, 45, 45, 0.9);
-    animation: labelFlicker 2.5s ease-in-out infinite;
-  }
-
-  @keyframes labelFlicker {
-    0%, 90%  { opacity: 1; }
-    92%      { opacity: 0.2; }
-    95%      { opacity: 1; }
-    97%      { opacity: 0.4; }
-    100%     { opacity: 1; }
-  }
-
-  /* ── Container & layout ────────────────────────── */
-  :global(body.upside-down .container) {
-    background: #0d0808;
-    box-shadow: 0 0 40px rgba(180, 0, 0, 0.35), 0 0 80px rgba(100, 0, 0, 0.2);
-    border: 1px solid #4a0808;
-  }
-
-  :global(body.upside-down .profile) {
-    background: #110a0a;
-    border-bottom: 2px solid #6b0000;
-  }
-
-  :global(body.upside-down .profile p) {
-    color: #d4b0b0;
-  }
-
-  :global(body.upside-down .photo-mosaic) {
-    background: #1a0505;
-  }
-
-  :global(body.upside-down .content) {
-    background: #0d0808;
-  }
-
-  :global(body.upside-down .content p) {
-    color: #d4b0b0;
-  }
-
-  /* Footer photo */
-  :global(body.upside-down .footer-photo) {
-    cursor: default;
-    position: relative;
-  }
-
-  :global(body.upside-down .footer-photo img) {
-    filter: brightness(0.45) sepia(0.6) hue-rotate(-20deg) saturate(0.5);
-  }
-
-  :global(body.upside-down .footer-upside-down) {
-    cursor: default;
-  }
-
-  /* ── Work experience ───────────────────────────── */
-  :global(body.upside-down .job) {
-    border-bottom-color: #4a0808;
-  }
-
-  :global(body.upside-down .job-title) {
-    color: #ff8c00;
-  }
-
-  :global(body.upside-down .job-org) {
-    color: #cc5555;
-  }
-
-  :global(body.upside-down .job-dates) {
-    color: #886060;
-  }
-
-  :global(body.upside-down .job-bullets li) {
-    color: #d4b0b0;
-  }
-
-  :global(body.upside-down .job-bullets li::before) {
-    color: #ff2d2d;
-  }
-
-  /* ── Education & degrees ───────────────────────── */
-  :global(body.upside-down .degree-card) {
-    background: #150a0a;
-    border-left-color: #cc2200;
-  }
-
-  :global(body.upside-down .degree-label) {
-    color: #ff8c00;
-  }
-
-  :global(body.upside-down .degree-field) {
-    color: #d4b0b0;
-  }
-
-  :global(body.upside-down .degree-inst) {
-    color: #cc5555;
-  }
-
-  :global(body.upside-down .degrees-label),
-  :global(body.upside-down .teaching-grid-label) {
-    color: #cc5555;
-  }
-
-  :global(body.upside-down .teaching-card) {
-    background: #150a0a;
-    border-left-color: #cc2200;
-    color: #ff8c00;
-  }
-
-  /* ── Executive education ───────────────────────── */
-  :global(body.upside-down .exec-ed-card) {
-    background: #150a0a;
-    border-left-color: #cc2200;
-  }
-
-  :global(body.upside-down .exec-ed-card.upcoming) {
-    background: #180d00;
-    border-left-color: #8b4500;
-  }
-
-  :global(body.upside-down .exec-ed-program) {
-    color: #ff8c00;
-  }
-
-  :global(body.upside-down .exec-ed-year) {
-    color: #886060;
-  }
-
-  :global(body.upside-down .exec-ed-inst) {
-    color: #cc5555;
-  }
-
-  :global(body.upside-down .upcoming-badge) {
-    background: #2a1000;
-    border-color: #6b3300;
-    color: #ff8c00;
-  }
-
-  /* ── Publications & awards ─────────────────────── */
-  :global(body.upside-down .pub-item) {
-    background: #150a0a;
-    border-color: #4a0808;
-  }
-
-  :global(body.upside-down .pub-title) {
-    color: #ff8c00;
-  }
-
-  :global(body.upside-down .pub-meta) {
-    color: #886060;
-  }
-
-  :global(body.upside-down .pub-award) {
-    background: #1a0a00;
-    border-color: #6b3300;
-    color: #ff8c00;
-  }
-
-  :global(body.upside-down .awards-list li) {
-    background: #150a0a;
-    border-color: #4a0808;
-    color: #d4b0b0;
-  }
-
-  /* ── Running / streak ──────────────────────────── */
-  :global(body.upside-down .streak-count) {
-    color: #ff2d2d;
-    text-shadow: 0 0 8px rgba(255, 45, 45, 0.7);
-  }
-
-  :global(body.upside-down .strava-link) {
-    color: #ff8c00;
-  }
-
-  /* ── Lightbox ──────────────────────────────────── */
-  :global(body.upside-down .lightbox) {
-    background: rgba(5, 0, 0, 0.96);
+  .layout { max-width: 1300px; margin: 0 auto; background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.1); padding: 1.5rem; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .08em; color: #35578a; }
+  .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .skip-link:focus { left: 1rem; top: 1rem; width: auto; height: auto; background: #fff; padding: .5rem .75rem; border: 2px solid #0f5db0; border-radius: 8px; z-index: 1000; }
+  .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
+  label { display: grid; gap: .35rem; color: #1f3350; }
+  input, select, textarea { padding: .6rem; border: 1px solid #c5d0df; border-radius: 8px; font: inherit; }
+  .dates-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .75rem 0; }
+  .dates-row button { border: 1px solid #c5d0df; background: #fff; border-radius: 999px; padding: .26rem .6rem; }
+  .dates-row button.selected { background: #e7f1ff; border-color: #8fb0d8; }
+  .summary { color: #425b80; }
+  .intro-note { color: #5a4c2a; background: #fff9ea; border: 1px solid #f1ddb0; border-radius: 8px; padding: .55rem; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+  .table-wrap { overflow: auto; border: 1px solid #d7e0ec; border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+  th, td { padding: .75rem; border-bottom: 1px solid #e6edf6; text-align: left; vertical-align: top; }
+  thead th { background: #f3f7fc; }
+  .meta { color: #5d6e87; margin-top: .25rem; }
+  .badge { background: #e7f1ff; color: #184778; padding: .2rem .5rem; border-radius: 999px; font-weight: 600; }
+  .register-btn { border: 1px solid #0f5db0; background: #1c73d3; color: #fff; border-radius: 999px; padding: .35rem .7rem; }
+  .calendar-summary { list-style: none; border: 1px solid #8fb0d8; background: #f3f8ff; color: #113b68; border-radius: 999px; padding: .35rem .7rem; font-weight: 600; cursor: pointer; }
+  .calendar-summary::-webkit-details-marker { display: none; }
+  .calendar-menu { margin-top: .4rem; display: flex; flex-direction: column; gap: .35rem; min-width: 180px; }
+  .calendar-btn { border-radius: 999px; padding: .33rem .65rem; border: 1px solid; text-decoration: none; }
+  .calendar-btn.apple { border-color: #d8d8db; background: #f7f7f8; color: #111; }
+  .calendar-btn.google { border-color: #8fb0d8; background: #f3f8ff; color: #113b68; }
+  .calendar-btn.outlook { border-color: #8fb0d8; background: #eef6ff; color: #0a3f73; }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(8,23,48,.45); }
+  .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(980px, 95vw); max-height: 92vh; overflow: auto; background: #fff; border-radius: 12px; padding: 1rem; }
+  .close-modal { position: absolute; top: .35rem; right: .45rem; border: 1px solid #ccd8ea; background: #fff; border-radius: 6px; width: 2rem; height: 2rem; font-size: 1.2rem; }
+  .warning { background: #fff5e6; border: 1px solid #ffd9a3; border-radius: 8px; padding: .55rem; }
+  .reg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+  .reg-grid .full { grid-column: 1 / -1; }
+  .inline { border: 1px solid #dce6f2; border-radius: 8px; padding: .6rem; }
+  .inline legend { padding: 0 .2rem; }
+  .checkbox { display: flex; align-items: flex-start; gap: .5rem; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .6rem; }
+  .primary { background: #1c73d3; color: #fff; border: 1px solid #0f5db0; border-radius: 8px; }
+
+  button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #0f5db0; outline-offset: 2px; }
+
+  @media (max-width: 900px) {
+    .layout { padding: 1rem; }
+    .controls { grid-template-columns: 1fr; }
+    .table-wrap { border: 0; }
+    table, thead, tbody, tr, th, td { display: block; width: 100%; }
+    thead { display: none; }
+    tr { background: #fbfdff; border: 1px solid #dce6f2; border-radius: 10px; margin-bottom: .7rem; padding: .4rem; }
+    td { border: 0; padding: .45rem .35rem; }
+    td::before { content: attr(data-label); display: block; color: #5a6f8d; font-size: .8rem; margin-bottom: .12rem; }
+    .reg-grid { grid-template-columns: 1fr; }
   }
 </style>
