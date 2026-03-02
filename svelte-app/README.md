@@ -107,3 +107,37 @@ Then, from within your project folder:
 npm run build
 surge public my-project.surge.sh
 ```
+
+## Deploy this mirror to GitHub Pages
+
+1. Push this repository to GitHub.
+2. In your repo settings, enable **Pages** and select **GitHub Actions** as source.
+3. The included workflow (`.github/workflows/deploy-pages.yml`) will build and publish automatically on pushes to `main`.
+
+### GitHub Pages quick publish
+
+This repo now includes a workflow at `.github/workflows/deploy-pages.yml` to publish `svelte-app/public` to GitHub Pages on pushes to `main`.
+
+After pushing to GitHub:
+1. Open **Settings → Pages**
+2. Set source to **GitHub Actions**
+3. Visit the URL shown in the Actions deploy job
+
+
+## Use a separate repo (recommended)
+
+Yes — this is a good idea to avoid impacting any other project history.
+
+1. Create a new GitHub repo (for example: `kyem-training-calendar-mirror`).
+2. From your local clone, add the new repo as a second remote:
+   ```bash
+   git remote add mirror https://github.com/<your-org>/<new-repo>.git
+   ```
+3. Push this project to that remote:
+   ```bash
+   git push mirror HEAD:main
+   ```
+4. In the new repo, enable **Settings → Pages → GitHub Actions**.
+5. Push future updates to the new repo remote so deployment and history stay isolated.
+
+Tip: if you want this repo to only track the new destination, replace `origin` instead of adding `mirror`.
