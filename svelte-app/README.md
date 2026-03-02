@@ -211,3 +211,20 @@ git push origin main
 ```
 
 After push, open **Actions → Deploy Svelte app to GitHub Pages** and use the URL from the `deploy` job.
+
+## Registration database integration (per-class spreadsheet + backup)
+
+Current behavior in the app:
+- If `REGISTRATION_API_URL` in `src/App.svelte` is blank, form submission downloads a JSON draft file in-browser.
+- If `REGISTRATION_API_URL` is set, the app sends a JSON `POST` to that endpoint.
+
+Recommended setup for your request (shared repo + per-class sheets + backups):
+1. Create a shared Google Sheet (single file for all classes).
+2. Deploy a Google Apps Script Web App as the API endpoint.
+3. In the script, for each incoming registration:
+   - Find/create a tab per class (`Class_<classId>`)
+   - Append the registration row
+   - Write the full payload into a `Backups` tab (timestamped JSON snapshot)
+4. Put the deployed script URL in `REGISTRATION_API_URL`.
+
+This gives you automatic class-level registration tables and a running backup history.

@@ -9,6 +9,12 @@
   let selectedMode = 'All';
   let selectedDate = 'All dates';
 
+  // Set this to your deployed registration API endpoint to persist submissions.
+  // Keep empty to use local JSON download fallback.
+  const REGISTRATION_API_URL = '';
+  let submissionMessage = '';
+  let submissionError = '';
+
   let showRegistrationModal = false;
   let intendedCourse = '';
   let classSearch = '';
@@ -138,13 +144,37 @@
     showRegistrationModal = true;
   }
 
-  function handleRegistrationSubmit() {
+  async function handleRegistrationSubmit() {
+    submissionMessage = '';
+    submissionError = '';
+
     const selectedClass = trainings.find((t) => String(t.id) === registrationForm.selectedClassId);
     const payload = {
       ...registrationForm,
+      selectedClassId: registrationForm.selectedClassId,
       selectedClass: selectedClass ? `${selectedClass.title} - ${selectedClass.location}` : '',
       submittedAtEastern: today
     };
+
+    if (REGISTRATION_API_URL) {
+      try {
+        const response = await fetch(REGISTRATION_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Registration API returned ${response.status}`);
+        }
+
+        submissionMessage = 'Registration submitted to connected class database.';
+        showRegistrationModal = false;
+        return;
+      } catch (error) {
+        submissionError = 'Could not submit to the connected database. Downloading draft JSON instead.';
+      }
+    }
 
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -156,6 +186,7 @@
     link.remove();
     URL.revokeObjectURL(url);
 
+    submissionMessage = 'Registration exported as JSON draft (API not connected yet).';
     showRegistrationModal = false;
   }
 
@@ -219,6 +250,9 @@
 
   <p class="summary" role="status" aria-live="polite">Showing {filtered.length} of {trainings.length} trainings · Updated {formatDate(today)} (Eastern)</p>
 
+  {#if submissionMessage}<p class="submit-status" role="status" aria-live="polite">{submissionMessage}</p>{/if}
+  {#if submissionError}<p class="submit-error" role="alert">{submissionError}</p>{/if}
+
   <section id="results" class="table-wrap" aria-label="Training results">
     <table>
       <caption class="sr-only">KYEM training results with registration and calendar actions</caption>
@@ -264,6 +298,7 @@
     <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
     <p>You clicked: <strong>{intendedCourse}</strong></p>
     <p id="registration-modal-desc" class="warning">Class is intentionally not prefilled. Search and select from the class list below.</p>
+    <p class="destination">Data destination: {REGISTRATION_API_URL ? 'Connected registration database (API)' : 'Local JSON draft download (no live database connected yet)'}</p>
 
     <form class="reg-grid" on:submit|preventDefault={handleRegistrationSubmit}>
       <label>First Name *<input bind:value={registrationForm.firstName} required /></label>
@@ -355,6 +390,9 @@
   .dates-row button.selected { background: #e7f1ff; border-color: #8fb0d8; }
   .summary { color: #425b80; }
   .intro-note { color: #5a4c2a; background: #fff9ea; border: 1px solid #f1ddb0; border-radius: 8px; padding: .55rem; }
+
+  .submit-status { color: #1d5f36; background: #eaf8ef; border: 1px solid #bfe5cb; border-radius: 8px; padding: .5rem .65rem; margin: .5rem 0; }
+  .submit-error { color: #7a1c1c; background: #fff1f1; border: 1px solid #f3c2c2; border-radius: 8px; padding: .5rem .65rem; margin: .5rem 0; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
   .table-wrap { overflow: auto; border: 1px solid #d7e0ec; border-radius: 10px; }
   table { width: 100%; border-collapse: collapse; min-width: 1200px; }
@@ -375,9 +413,12 @@
   .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(980px, 95vw); max-height: 92vh; overflow: auto; background: #fff; border-radius: 12px; padding: 1rem; }
   .close-modal { position: absolute; top: .35rem; right: .45rem; border: 1px solid #ccd8ea; background: #fff; border-radius: 6px; width: 2rem; height: 2rem; font-size: 1.2rem; }
   .warning { background: #fff5e6; border: 1px solid #ffd9a3; border-radius: 8px; padding: .55rem; }
+  .destination { color: #344f73; margin: .2rem 0 .8rem; }
   .reg-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
   .reg-grid .full { grid-column: 1 / -1; }
-  .inline { border: 1px solid #dce6f2; border-radius: 8px; padding: .6rem; }
+  .inline { border: 1px solid #dce6f2; border-radius: 8px; padding: .6rem; display: grid; gap: .55rem; }
+  .inline label { display: flex; align-items: center; gap: .55rem; margin: 0; color: #1f3350; }
+  .inline input[type='radio'] { margin: 0; width: 1rem; height: 1rem; flex: 0 0 auto; }
   .inline legend { padding: 0 .2rem; }
   .checkbox { display: flex; align-items: flex-start; gap: .5rem; }
   .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .6rem; }
