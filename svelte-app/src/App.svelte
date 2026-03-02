@@ -230,6 +230,7 @@
   let currentPage = 'home';
   let selectedRoleId = orgChart.id;
   let zoom = 105;
+  let chartViewMode = 'landscape';
 
   let masterContacts = [...defaultMasterContacts];
   let assignmentsByRole = { ...defaultAssignments };
@@ -604,6 +605,10 @@
     <section class="org-toolbar no-print" aria-label="Org chart controls">
       <p><strong>{populatedRoles}</strong> / {roleList.length} roles currently staffed</p>
       <label>Zoom ({zoom}%) <input type="range" min="85" max="160" step="5" bind:value={zoom} /></label>
+      <div class="view-toggle" role="group" aria-label="Chart view mode">
+        <button type="button" class:active={chartViewMode === 'landscape'} on:click={() => (chartViewMode = 'landscape')}>Landscape view</button>
+        <button type="button" class:active={chartViewMode === 'portrait'} on:click={() => (chartViewMode = 'portrait')}>Portrait view</button>
+      </div>
       <button type="button" on:click={printOrgChart}>Print / Save PDF</button>
     </section>
 
@@ -638,7 +643,7 @@
     </section>
 
     <div class="org-two-col">
-      <section class="chart-wrap" aria-label="Organizational chart">
+      <section class={`chart-wrap ${chartViewMode === 'portrait' ? 'chart-portrait' : 'chart-landscape'}`} aria-label="Organizational chart">
         <p class="chart-tip no-print">Tip: rotate your phone to landscape for a wider chart view.</p>
         <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
           <ul class="tree">
@@ -647,6 +652,7 @@
               selectedRoleId={selectedRoleId}
               assignmentsByRole={assignmentsByRole}
               contactsById={contactsById}
+              viewMode={chartViewMode}
               on:selectrole={handleRoleSelect}
             />
           </ul>
@@ -942,6 +948,9 @@
   .org-layout { overflow: hidden; }
   .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
   .org-toolbar p { margin: 0; }
+  .view-toggle { display: inline-flex; border: 1px solid #b8c7dc; border-radius: 8px; overflow: hidden; }
+  .view-toggle button { border: 0; background: #f8fbff; padding: .35rem .65rem; color: #12375f; }
+  .view-toggle button.active { background: #1c73d3; color: #fff; }
   .google-sync, .ics-tools { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; margin-bottom: .8rem; background: #fbfdff; }
   .google-sync h2, .ics-tools h2 { margin: 0 0 .35rem; font-size: 1rem; }
   .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
@@ -949,6 +958,8 @@
   .org-two-col { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: .8rem; align-items: start; }
   .chart-wrap { overflow: auto; padding: .6rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 78vh; }
   .chart-scale { transform: scale(var(--chart-zoom)); transform-origin: top left; width: calc(100% / var(--chart-zoom)); min-width: 1320px; }
+  .chart-wrap.chart-portrait .chart-scale { min-width: 920px; }
+  .chart-wrap.chart-portrait { max-height: 82vh; }
   .tree { margin: 0 auto; padding: 0; display: table; }
   :global(.tree ul) { margin: 0; padding: 0; display: table; }
   .role-panel { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }

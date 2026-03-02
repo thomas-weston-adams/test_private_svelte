@@ -5,6 +5,7 @@
   export let selectedRoleId = '';
   export let assignmentsByRole = {};
   export let contactsById = {};
+  export let viewMode = 'landscape';
 
   const dispatch = createEventDispatcher();
 
@@ -34,13 +35,14 @@
     {/if}
   </button>
   {#if node.children?.length}
-    <ul>
+    <ul class:portrait={viewMode === 'portrait'}>
       {#each node.children as child}
         <svelte:self
           node={child}
           selectedRoleId={selectedRoleId}
           assignmentsByRole={assignmentsByRole}
           contactsById={contactsById}
+          viewMode={viewMode}
           on:selectrole
         />
       {/each}
@@ -59,6 +61,7 @@
   li:first-child::after { border-radius: 5px 0 0 0; }
 
   ul { display: flex; justify-content: center; margin: 0; padding: .95rem 0 0; position: relative; }
+  ul.portrait { flex-wrap: wrap; max-width: 900px; margin: 0 auto; gap: .35rem; }
   ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 2px solid #8bbf7a; width: 0; height: .75rem; }
 
   .node {
@@ -69,22 +72,22 @@
     max-width: 220px;
     padding: 0.6rem;
     border-radius: 8px;
-    font-size: .88rem;
-    color: #fff;
+    font-size: .92rem;
+    color: #f8fafc;
     border: 2px solid transparent;
     box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
     cursor: pointer;
     text-align: center;
   }
 
-  .role-name { font-weight: 700; }
+  .role-name { font-weight: 800; line-height: 1.2; }
   .assigned-name { font-weight: 600; }
   .assigned-name.vacant { opacity: .9; font-style: italic; }
-  .assigned-contact { font-size: .78rem; opacity: .95; }
+  .assigned-contact { font-size: .8rem; opacity: .98; }
 
   .selected { border-color: #111827; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #111827; }
-  .command { background: #f2b600; }
-  .section { background: #5ea741; }
-  .branch { background: #3f89ca; }
-  .unit { background: #ef7f2c; }
+  .command { background: #f9d24b; color: #111827; }
+  .section { background: #2f7d32; color: #ffffff; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
+  .branch { background: #1f5f97; color: #ffffff; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
+  .unit { background: #b85d10; color: #ffffff; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
 </style>
