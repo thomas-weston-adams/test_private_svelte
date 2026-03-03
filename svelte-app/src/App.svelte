@@ -19,6 +19,65 @@
   // Backend docs: set these to your master Google Sheet and CSV publish URLs.
   const BACKEND_DOCS_SHEET_URL = '';
   const BACKEND_DOCS_CSV_URL = '';
+
+  const kyemNews = [
+    {
+      id: 1,
+      date: '2026-01-24',
+      category: 'Emergency Declaration',
+      title: 'Gov. Beshear Declares State of Emergency for Severe Winter Storm',
+      summary: 'Governor Andy Beshear executed Executive Order 2026-047, declaring a State of Emergency pending severe winter storms. KYEM activated the State Emergency Operations Center and coordinated 117 warming centers statewide. Over 885 people sheltered, and KYEM received 942 storm-related calls.',
+      url: 'https://www.kentucky.gov/Pages/Activity-stream.aspx?n=GovernorBeshear&prId=2374'
+    },
+    {
+      id: 2,
+      date: '2025-12-01',
+      category: 'Federal Assistance',
+      title: 'FEMA Has Provided $106 Million to Kentucky Disaster Survivors in 2025',
+      summary: 'FEMA Individual Assistance Specialists continued supporting Kentucky survivors through the state Unmet Needs Call Center. Kentuckians can reach the call center at (502) 607-6665.',
+      url: 'https://www.kentuckytoday.com/news/fema-has-provided-106-million-to-kentucky-disaster-survivors-in-2025/article_dca366bb-7576-4066-a110-7a1ce9de8173.html'
+    },
+    {
+      id: 3,
+      date: '2025-05-23',
+      category: 'FEMA Declaration',
+      title: 'FEMA Approves DR-4875-KY for May 2025 Severe Storms and Tornadoes',
+      summary: 'Federal disaster declaration DR-4875-KY approved for severe storms, straight-line winds, and tornadoes affecting Kentucky on May 16–17, 2025. Declaration enables federal recovery assistance for impacted counties.',
+      url: 'https://www.fema.gov/locations/kentucky'
+    },
+    {
+      id: 4,
+      date: '2025-04-24',
+      category: 'FEMA Declaration',
+      title: 'FEMA Approves DR-4864-KY for April–May 2025 Severe Weather Events',
+      summary: 'Federal disaster declaration DR-4864-KY approved for severe storms, tornadoes, flooding, landslides, and mudslides affecting Kentucky from April 2 to May 16, 2025.',
+      url: 'https://www.fema.gov/locations/kentucky'
+    },
+    {
+      id: 5,
+      date: '2025-04-22',
+      category: 'Program Milestone',
+      title: 'KYEM Credentials First Two Individuals Under Kentucky Qualification System',
+      summary: 'Director Eric Gibson issued the first-ever KQS credentials: Dustin Heiser as Incident Commander and Re\'Jeana Craft as Operations Section Chief — marking the program\'s inaugural certifications.',
+      url: 'https://kyem.ky.gov/programs/Pages/Kentucky-Qualification-System.aspx'
+    },
+    {
+      id: 6,
+      date: '2025-03-01',
+      category: 'Grants',
+      title: 'FY 2026 Search and Rescue Aid Grant — $500,000 Available Statewide',
+      summary: 'KYEM announced the Request for Application period for the FY 2026 SAR Aid Program. Priority funding goes to rescue squads with no other federal or state grant funding. Award notifications expected September 5, 2025; scope of work must be completed by May 1, 2026.',
+      url: 'https://kyem.ky.gov/sargrant/Pages/default.aspx'
+    },
+    {
+      id: 7,
+      date: '2025-01-04',
+      category: 'Emergency Declaration',
+      title: 'Gov. Beshear Declares State of Emergency Ahead of January 2025 Winter Storm',
+      summary: 'Governor Beshear declared a state of emergency ahead of a severe winter storm expected January 5, 2025, bringing snow, freezing rain, ice, and arctic temperatures. KYEM activated the State Emergency Operations Center at midnight.',
+      url: 'https://www.wsaz.com/2025/01/04/ky-gov-beshear-declares-state-emergency-ahead-winter-storm-system/'
+    }
+  ];
   let submissionMessage = '';
   let submissionError = '';
 
@@ -294,7 +353,7 @@
 
   function setPage(page) {
     currentPage = page;
-    const hashes = { 'org-chart': '#org-chart', training: '#training', news: '#news', directory: '#directory', twitter: '#twitter', docs: '#docs' };
+    const hashes = { 'org-chart': '#org-chart', training: '#training', news: '#news', directory: '#directory', twitter: '#twitter', docs: '#docs', 'kyem-home': '#kyem-home' };
     window.location.hash = hashes[page] || '#home';
   }
 
@@ -519,6 +578,7 @@
         : h === '#directory' ? 'directory'
         : h === '#twitter' || h === '#x' ? 'twitter'
         : h === '#docs' ? 'docs'
+        : h === '#kyem-home' ? 'kyem-home'
         : 'home';
     };
 
@@ -562,6 +622,7 @@
   <a href="#directory" class:active={currentPage === 'directory'} on:click|preventDefault={() => setPage('directory')}>Directory</a>
   <a href="#twitter" class:active={currentPage === 'twitter'} on:click|preventDefault={() => setPage('twitter')}>Twitter/X</a>
   <a href="#docs" class:active={currentPage === 'docs'} on:click|preventDefault={() => setPage('docs')}>Backend Docs</a>
+  <a href="#kyem-home" class:active={currentPage === 'kyem-home'} on:click|preventDefault={() => setPage('kyem-home')}>KYEM Site</a>
 </nav>
 
 {#if currentPage === 'home'}
@@ -607,6 +668,12 @@
         <h2>Backend Docs</h2>
         <p>Developer guides, master sheet links, and integration documentation.</p>
         <a href="#docs" on:click|preventDefault={() => setPage('docs')}>Open Docs</a>
+      </article>
+
+      <article class="home-card card-accent">
+        <h2>KYEM Website (Rework)</h2>
+        <p>Improved alternative to the official kyem.ky.gov homepage — cleaner layout, no broken images.</p>
+        <a href="#kyem-home" on:click|preventDefault={() => setPage('kyem-home')}>Open KYEM Site</a>
       </article>
     </section>
   </main>
@@ -905,14 +972,25 @@
 {/if}
 
 {:else if currentPage === 'news'}
-  <main class="layout home-layout">
+  <main class="layout news-layout">
     <header>
-      <p class="eyebrow">NEWS</p>
+      <p class="eyebrow">NEWS &amp; ANNOUNCEMENTS</p>
       <h1>Kentucky Emergency Management News</h1>
-      <p class="intro">Latest announcements, alerts, and updates from KYEM.</p>
+      <p class="intro">Latest declarations, grants, program updates, and announcements from KYEM. Source: <a href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/news</a></p>
     </header>
-    <div class="embed-shell">
-      <p class="hint">Embed a news feed or RSS widget here. Update <code>NEWS_FEED_URL</code> in App.svelte to connect a live source.</p>
+
+    <div class="news-grid">
+      {#each kyemNews as item}
+        <article class="news-card">
+          <div class="news-meta">
+            <span class="news-date">{item.date}</span>
+            <span class="news-tag tag-{item.category.toLowerCase().replace(/[^a-z]+/g,'-')}">{item.category}</span>
+          </div>
+          <h2 class="news-title">{item.title}</h2>
+          <p class="news-summary">{item.summary}</p>
+          <a class="news-link" href={item.url} target="_blank" rel="noopener noreferrer">Read more ↗</a>
+        </article>
+      {/each}
     </div>
   </main>
 
@@ -941,6 +1019,126 @@
     <div class="embed-shell">
       <p class="hint">Embed the official KYEM Twitter/X timeline widget here. Update <code>TWITTER_HANDLE</code> in App.svelte and add the Twitter embed script.</p>
     </div>
+  </main>
+
+{:else if currentPage === 'kyem-home'}
+  <main class="layout kyem-layout">
+
+    <div class="kyem-alert" role="alert">
+      <strong>Active Response:</strong> State of Emergency in effect — Severe Winter Storm (Executive Order 2026-047). Find warming centers at <a href="https://www.kyem.ky.gov" target="_blank" rel="noopener noreferrer">kyem.ky.gov</a> or call <strong>800-255-2587</strong>.
+    </div>
+
+    <header class="kyem-hero">
+      <div class="kyem-hero-text">
+        <p class="eyebrow">COMMONWEALTH OF KENTUCKY</p>
+        <h1>Kentucky Emergency Management</h1>
+        <p class="kyem-tagline">Preparing Kentuckians Before, During, and After Emergencies</p>
+        <p class="kyem-mission">KYEM coordinates statewide preparedness, response, recovery, and mitigation to protect Kentucky communities and families. Directed by Eric Gibson and located at the Boone National Guard Center, Frankfort.</p>
+      </div>
+      <div class="kyem-hero-actions">
+        <a class="kyem-btn-primary" href="https://www.kyem.ky.gov" target="_blank" rel="noopener noreferrer">Official KYEM Website ↗</a>
+        <a class="kyem-btn-secondary" href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">News &amp; Announcements ↗</a>
+      </div>
+    </header>
+
+    <section class="kyem-quicklinks" aria-label="Quick actions">
+      <h2>Quick Actions</h2>
+      <div class="kyem-ql-grid">
+        <a class="kyem-ql" href="tel:8002552587">
+          <span class="kyem-ql-icon">📞</span>
+          <strong>Report an Incident</strong>
+          <span>State Warning Point 24/7<br>800-255-2587</span>
+        </a>
+        <a class="kyem-ql" href="mailto:kyemswp@ky-em.org">
+          <span class="kyem-ql-icon">✉</span>
+          <strong>Email Warning Point</strong>
+          <span>kyemswp@ky-em.org</span>
+        </a>
+        <a class="kyem-ql" href="https://www.kyem.ky.gov" target="_blank" rel="noopener noreferrer">
+          <span class="kyem-ql-icon">🏠</span>
+          <strong>Find Warming Centers</strong>
+          <span>kyem.ky.gov</span>
+        </a>
+        <a class="kyem-ql" href="https://kyem.ky.gov/sargrant/Pages/default.aspx" target="_blank" rel="noopener noreferrer">
+          <span class="kyem-ql-icon">📋</span>
+          <strong>Apply for Grants</strong>
+          <span>SAR &amp; other programs</span>
+        </a>
+        <a class="kyem-ql" href="https://transportation.ky.gov" target="_blank" rel="noopener noreferrer">
+          <span class="kyem-ql-icon">🛣</span>
+          <strong>Road Conditions</strong>
+          <span>GoKy.ky.gov</span>
+        </a>
+        <a class="kyem-ql" href="https://www.kyem.ky.gov/inside-kyem/kyem-directory" target="_blank" rel="noopener noreferrer">
+          <span class="kyem-ql-icon">📁</span>
+          <strong>KYEM Directory</strong>
+          <span>Staff contacts</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="kyem-programs" aria-label="Programs and operations">
+      <h2>Operations &amp; Programs</h2>
+      <div class="kyem-prog-grid">
+        <article class="kyem-prog-card">
+          <h3>State Emergency Operations Center</h3>
+          <p>The SEOC at Boone National Guard Center, Frankfort coordinates statewide response for multi-county events, hosting over a dozen state agency partners. Activates when disasters strike the Commonwealth.</p>
+          <a href="https://www.kyem.ky.gov/operations-news" target="_blank" rel="noopener noreferrer">Operations &amp; News ↗</a>
+        </article>
+        <article class="kyem-prog-card">
+          <h3>Search &amp; Rescue</h3>
+          <p>Supports county rescue squads performing search, rescue, and recovery operations for lost or missing persons. FY 2026 SAR Aid Grant: ~$500,000 available statewide.</p>
+          <a href="https://kyem.ky.gov/sargrant/Pages/default.aspx" target="_blank" rel="noopener noreferrer">SAR Grant Info ↗</a>
+        </article>
+        <article class="kyem-prog-card">
+          <h3>Hazardous Materials (HMEP)</h3>
+          <p>Administers the Hazardous Materials Emergency Preparedness grant and provides training for response to Extremely Hazardous Substance (EHS) emergencies across Kentucky.</p>
+          <a href="https://www.kyem.ky.gov/operations-and-programs/kerc" target="_blank" rel="noopener noreferrer">KERC Info ↗</a>
+        </article>
+        <article class="kyem-prog-card">
+          <h3>Chemical Stockpile (CSEPP)</h3>
+          <p>Supports communities near the Blue Grass Army Depot. Trained professionals protect communities from chemical agent incidents with preparedness, response, and communications planning.</p>
+          <a href="https://www.kyem.ky.gov" target="_blank" rel="noopener noreferrer">More Info ↗</a>
+        </article>
+        <article class="kyem-prog-card">
+          <h3>Kentucky Qualification System (KQS)</h3>
+          <p>Credential program for emergency management professionals. In April 2025 the first KQS credentials were issued — Incident Commander (Heiser) and Operations Section Chief (Craft).</p>
+          <a href="https://kyem.ky.gov/programs/Pages/Kentucky-Qualification-System.aspx" target="_blank" rel="noopener noreferrer">KQS Info ↗</a>
+        </article>
+        <article class="kyem-prog-card">
+          <h3>Training &amp; Exercise</h3>
+          <p>KYEM supports local and regional training programs. Use the Training tab in this workspace to view the KYEM training calendar, register for classes, and export calendar entries.</p>
+          <a href="#training" on:click|preventDefault={() => setPage('training')}>Open Training Page</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="kyem-contact" aria-label="Contact information">
+      <h2>Contact KYEM</h2>
+      <div class="kyem-contact-grid">
+        <div>
+          <p class="kyem-contact-label">Main Office</p>
+          <p>100 Minuteman Parkway<br>Frankfort, KY 40601-6168</p>
+          <p><a href="tel:5026071630">(502) 607-1630</a></p>
+        </div>
+        <div>
+          <p class="kyem-contact-label">State Warning Point (24/7)</p>
+          <p>Hazardous spills, releases, or incidents</p>
+          <p><a href="tel:8002552587">800-255-2587</a><br><a href="mailto:kyemswp@ky-em.org">kyemswp@ky-em.org</a></p>
+        </div>
+        <div>
+          <p class="kyem-contact-label">Director</p>
+          <p>Eric Gibson<br>Appointed April 2024</p>
+          <p><a href="https://www.kyem.ky.gov/inside-kyem/kyem-directory" target="_blank" rel="noopener noreferrer">Full Directory ↗</a></p>
+        </div>
+        <div>
+          <p class="kyem-contact-label">FEMA Unmet Needs</p>
+          <p>Individual Assistance for disaster survivors</p>
+          <p><a href="tel:5026076665">(502) 607-6665</a></p>
+        </div>
+      </div>
+    </section>
+
   </main>
 
 {:else if currentPage === 'docs'}
@@ -1038,6 +1236,57 @@
   .embed-shell { border: 1px solid #d7e0ec; border-radius: 10px; padding: 1rem; background: #fbfdff; min-height: 200px; }
   .docs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
   .doc-link { display: inline-block; margin-top: .4rem; text-decoration: none; border: 1px solid #0f5db0; border-radius: 8px; padding: .35rem .55rem; color: #0f5db0; }
+  .card-accent { border-color: #0f5db0; background: #f0f7ff; }
+
+  /* News page */
+  .news-layout { min-height: 60vh; }
+  .news-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; margin-top: 1.2rem; }
+  .news-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: 1rem; background: #fbfdff; display: flex; flex-direction: column; gap: .4rem; }
+  .news-meta { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .news-date { color: #5a6f8d; font-size: .83rem; }
+  .news-tag { font-size: .75rem; font-weight: 600; padding: .18rem .5rem; border-radius: 999px; background: #e7f1ff; color: #184778; }
+  .news-tag.tag-emergency-declaration { background: #fff0f0; color: #9b1c1c; }
+  .news-tag.tag-fema-declaration { background: #fff7e6; color: #854d0e; }
+  .news-tag.tag-grants { background: #f0fdf4; color: #166534; }
+  .news-tag.tag-federal-assistance { background: #f0f7ff; color: #1e3a5f; }
+  .news-tag.tag-program-milestone { background: #f5f3ff; color: #5b21b6; }
+  .news-title { margin: 0; font-size: 1rem; line-height: 1.35; color: #1a2f4e; }
+  .news-summary { margin: 0; color: #374f6e; font-size: .9rem; line-height: 1.5; flex: 1; }
+  .news-link { display: inline-block; margin-top: .6rem; padding: .32rem .7rem; font-size: .84rem; color: #0f5db0; text-decoration: none; font-weight: 600; border: 1px solid #0f5db0; border-radius: 999px; background: #f0f7ff; align-self: flex-start; }
+  .news-link:hover { background: #0f5db0; color: #fff; }
+
+  /* KYEM Site rework */
+  .kyem-layout { min-height: 60vh; display: flex; flex-direction: column; gap: 1.5rem; }
+  .kyem-alert { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: .6rem .9rem; color: #4d3800; font-size: .92rem; }
+  .kyem-alert a { color: #1a4f8a; }
+  .kyem-hero { display: grid; grid-template-columns: 1fr auto; gap: 1.2rem; align-items: start; padding: 1rem; background: linear-gradient(135deg,#0a2d5a 0%,#154a8a 100%); border-radius: 12px; color: #fff; }
+  .kyem-hero-text { display: flex; flex-direction: column; gap: .4rem; }
+  .kyem-hero .eyebrow { color: #93c5fd; margin: 0; }
+  .kyem-hero h1 { margin: 0; color: #fff; font-size: 1.6rem; }
+  .kyem-tagline { margin: 0; font-size: 1rem; color: #bfdbfe; font-style: italic; }
+  .kyem-mission { margin: 0; font-size: .88rem; color: #d1e8ff; max-width: 600px; }
+  .kyem-hero-actions { display: flex; flex-direction: column; gap: .5rem; flex-shrink: 0; }
+  .kyem-btn-primary { background: #fff; color: #0a2d5a; border: 2px solid #fff; border-radius: 8px; padding: .5rem .9rem; text-decoration: none; font-weight: 700; font-size: .88rem; text-align: center; }
+  .kyem-btn-secondary { background: transparent; color: #bfdbfe; border: 1px solid #4d8fcc; border-radius: 8px; padding: .5rem .9rem; text-decoration: none; font-size: .88rem; text-align: center; }
+  .kyem-quicklinks h2, .kyem-programs h2, .kyem-contact h2 { margin: 0 0 .7rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 2px solid #0f5db0; padding-bottom: .3rem; }
+  .kyem-ql-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .7rem; }
+  .kyem-ql { display: flex; flex-direction: column; gap: .2rem; padding: .75rem; border: 1px solid #c5d8f0; border-radius: 10px; background: #f7faff; text-decoration: none; color: #1a2f4e; transition: border-color .15s; }
+  .kyem-ql:hover { border-color: #0f5db0; background: #eef5ff; }
+  .kyem-ql-icon { font-size: 1.4rem; }
+  .kyem-ql strong { font-size: .9rem; color: #0a2d5a; }
+  .kyem-ql span { font-size: .8rem; color: #5a6f8d; }
+  .kyem-prog-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .8rem; }
+  .kyem-prog-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: .9rem; background: #fbfdff; display: flex; flex-direction: column; gap: .35rem; }
+  .kyem-prog-card h3 { margin: 0; font-size: .97rem; color: #0a2d5a; }
+  .kyem-prog-card p { margin: 0; font-size: .87rem; color: #374f6e; flex: 1; line-height: 1.5; }
+  .kyem-prog-card a { font-size: .85rem; color: #0f5db0; text-decoration: none; font-weight: 600; margin-top: auto; }
+  .kyem-prog-card a:hover { text-decoration: underline; }
+  .kyem-contact-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; }
+  .kyem-contact-grid div { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }
+  .kyem-contact-label { font-weight: 700; color: #0a2d5a; margin: 0 0 .25rem; font-size: .9rem; }
+  .kyem-contact-grid p { margin: 0 0 .2rem; font-size: .87rem; color: #374f6e; }
+  .kyem-contact-grid a { color: #0f5db0; text-decoration: none; }
+  .kyem-contact-grid a:hover { text-decoration: underline; }
 
   .org-layout { overflow: hidden; }
   .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
@@ -1078,6 +1327,12 @@
     .home-grid { grid-template-columns: 1fr; }
     .docs-grid { grid-template-columns: 1fr; }
     .ics-grid { grid-template-columns: 1fr; }
+    .news-grid { grid-template-columns: 1fr; }
+    .kyem-hero { grid-template-columns: 1fr; }
+    .kyem-hero-actions { flex-direction: row; }
+    .kyem-ql-grid { grid-template-columns: repeat(2, 1fr); }
+    .kyem-prog-grid { grid-template-columns: 1fr; }
+    .kyem-contact-grid { grid-template-columns: repeat(2, 1fr); }
     .role-panel { order: -1; }
     .chart-scale { min-width: 760px; }
   }
