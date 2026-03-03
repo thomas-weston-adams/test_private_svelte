@@ -663,7 +663,7 @@
   <a href="#home" class:active={currentPage === 'home'} on:click|preventDefault={() => setPage('home')}>Home</a>
   <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training</a>
   <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org Chart</a>
-  <a href="#news" class:active={currentPage === 'news'} on:click|preventDefault={() => setPage('news')}>News</a>
+  <a href="#news" class:active={currentPage === 'news'} on:click|preventDefault={() => setPage('news')}>News &amp; Information</a>
   <a href="#directory" class:active={currentPage === 'directory'} on:click|preventDefault={() => setPage('directory')}>Directory</a>
   <a href="#media-inquiry" class:active={currentPage === 'media-inquiry'} on:click|preventDefault={() => setPage('media-inquiry')}>Media Inquiry</a>
   <a href="#twitter" class:active={currentPage === 'twitter'} on:click|preventDefault={() => setPage('twitter')}>Twitter/X</a>
@@ -693,9 +693,9 @@
       </article>
 
       <article class="home-card">
-        <h2>News</h2>
+        <h2>News &amp; Information</h2>
         <p>Latest Kentucky Emergency Management news and announcements.</p>
-        <a href="#news" on:click|preventDefault={() => setPage('news')}>Open News</a>
+        <a href="#news" on:click|preventDefault={() => setPage('news')}>Open News &amp; Information</a>
       </article>
 
       <article class="home-card">
@@ -1027,13 +1027,13 @@
   <main class="layout news-layout">
     <header>
       <p class="eyebrow">NEWS &amp; PUBLIC INFORMATION</p>
-      <h1>Kentucky Emergency Management News</h1>
+      <h1>Kentucky Emergency Management News &amp; Information</h1>
       <p class="intro">Latest declarations, grants, program updates, and announcements from KYEM. Source: <a href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/news</a></p>
     </header>
 
     <section class="news-pio" aria-label="Public Information Office contacts">
       <h2 class="news-pio-heading">Media &amp; Public Information Contacts</h2>
-      <p class="hint">For media inquiries or official statements, contact the KYEM Public Information Office.</p>
+      <p class="hint">For media inquiries or official statements, contact the KYEM Public Information Office or <a href="#media-inquiry" on:click|preventDefault={() => setPage('media-inquiry')}>submit a media inquiry form</a>.</p>
       <div class="news-pio-grid">
         {#each kyemPIOContacts as person}
           <article class="news-pio-card">
