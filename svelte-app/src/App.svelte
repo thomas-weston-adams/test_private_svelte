@@ -1016,11 +1016,45 @@
 {:else if currentPage === 'news'}
   <main class="layout news-layout">
     <header>
-      <p class="eyebrow">NEWS &amp; ANNOUNCEMENTS</p>
+      <p class="eyebrow">NEWS &amp; PUBLIC INFORMATION</p>
       <h1>Kentucky Emergency Management News</h1>
       <p class="intro">Latest declarations, grants, program updates, and announcements from KYEM. Source: <a href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/news</a></p>
     </header>
 
+    <section class="news-pio" aria-label="Public Information Office contacts">
+      <h2 class="news-pio-heading">Media &amp; Public Information Contacts</h2>
+      <p class="hint">For media inquiries or official statements, contact the KYEM Public Information Office.</p>
+      <div class="news-pio-grid">
+        {#each kyemPIOContacts as person}
+          <article class="news-pio-card">
+            <div class="news-pio-info">
+              <div class="staff-avatar">{person.initials}</div>
+              <div>
+                <h3 class="staff-name">{person.name}</h3>
+                <p class="staff-title">{person.title}</p>
+                <p class="staff-agency">{person.agency}</p>
+              </div>
+            </div>
+            <address class="news-pio-contact">
+              {#if person.cell}<p>Cell: <a href="tel:{person.cell.replace(/[^+\d]/g,'')}">{person.cell}</a></p>{/if}
+              {#if person.office}<p>Office: <a href="tel:{person.office.replace(/[^+\d]/g,'')}">{person.office}</a></p>{/if}
+              <p>Email: <a href="mailto:{person.email}">{person.email}</a></p>
+            </address>
+            <div class="news-pio-qr" aria-label="Contact QR code for {person.name}">
+              {#if qrUrls[person.initials]}
+                <img class="staff-qr" src={qrUrls[person.initials]} alt="vCard QR code — {person.name}" />
+                <div class="staff-qr-avatar">{person.initials}</div>
+              {:else}
+                <div class="staff-qr-loading">Generating QR…</div>
+              {/if}
+              <p class="staff-qr-label">Scan to save contact</p>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
+
+    <h2 class="news-section-heading">Recent News &amp; Announcements</h2>
     <div class="news-grid">
       {#each kyemNews as item}
         <article class="news-card">
@@ -1124,8 +1158,7 @@
 
     <header class="kyem-hero">
       <div class="kyem-hero-text">
-        <p class="eyebrow">COMMONWEALTH OF KENTUCKY</p>
-        <h1>Kentucky Emergency Management</h1>
+        <img class="kyem-logo" src="images/KYEM Official Horizontal Logo 30 June 2025 (1611x695).jpg" alt="Kentucky Emergency Management — Prepare. Respond. Recover. Mitigate." />
         <p class="kyem-tagline">Preparing Kentuckians Before, During, and After Emergencies</p>
         <p class="kyem-mission">KYEM coordinates statewide preparedness, response, recovery, and mitigation to protect Kentucky communities and families. Directed by Eric Gibson and located at the Boone National Guard Center, Frankfort.</p>
       </div>
@@ -1340,7 +1373,19 @@
 
   /* News page */
   .news-layout { min-height: 60vh; }
-  .news-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; margin-top: 1.2rem; }
+  .news-section-heading { margin: 1.4rem 0 .6rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 2px solid #0f5db0; padding-bottom: .3rem; }
+  .news-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; margin-top: .6rem; }
+  /* News PIO contacts */
+  .news-pio { background: #f7faff; border: 1px solid #c5d8f0; border-radius: 12px; padding: 1rem; margin-top: 1rem; }
+  .news-pio-heading { margin: 0 0 .3rem; font-size: 1.05rem; color: #0a2d5a; }
+  .news-pio-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; margin-top: .7rem; }
+  .news-pio-card { background: #fff; border: 1px solid #d7e0ec; border-radius: 10px; padding: .9rem; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: .6rem 1rem; }
+  .news-pio-info { display: flex; gap: .65rem; align-items: flex-start; grid-column: 1; }
+  .news-pio-contact { font-style: normal; font-size: .85rem; color: #374f6e; display: flex; flex-direction: column; gap: .12rem; grid-column: 1; }
+  .news-pio-contact p { margin: 0; }
+  .news-pio-contact a { color: #0f5db0; text-decoration: none; }
+  .news-pio-contact a:hover { text-decoration: underline; }
+  .news-pio-qr { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: center; gap: .3rem; position: relative; }
   .news-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: 1rem; background: #fbfdff; display: flex; flex-direction: column; gap: .4rem; }
   .news-meta { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
   .news-date { color: #5a6f8d; font-size: .83rem; }
@@ -1359,19 +1404,27 @@
   .kyem-layout { min-height: 60vh; display: flex; flex-direction: column; gap: 1.5rem; }
   .kyem-alert { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: .6rem .9rem; color: #4d3800; font-size: .92rem; }
   .kyem-alert a { color: #1a4f8a; }
-  .kyem-hero { display: grid; grid-template-columns: 1fr auto; gap: 1.2rem; align-items: start; padding: 1rem; background: linear-gradient(135deg,#0a2d5a 0%,#154a8a 100%); border-radius: 12px; color: #fff; }
-  .kyem-hero-text { display: flex; flex-direction: column; gap: .4rem; }
-  .kyem-hero .eyebrow { color: #93c5fd; margin: 0; }
-  .kyem-hero h1 { margin: 0; color: #fff; font-size: 1.6rem; }
-  .kyem-tagline { margin: 0; font-size: 1rem; color: #bfdbfe; font-style: italic; }
-  .kyem-mission { margin: 0; font-size: .88rem; color: #d1e8ff; max-width: 600px; }
-  .kyem-hero-actions { display: flex; flex-direction: column; gap: .5rem; flex-shrink: 0; }
-  .kyem-btn-primary { background: #fff; color: #0a2d5a; border: 2px solid #fff; border-radius: 8px; padding: .5rem .9rem; text-decoration: none; font-weight: 700; font-size: .88rem; text-align: center; }
-  .kyem-btn-secondary { background: transparent; color: #bfdbfe; border: 1px solid #4d8fcc; border-radius: 8px; padding: .5rem .9rem; text-decoration: none; font-size: .88rem; text-align: center; }
-  .kyem-quicklinks h2, .kyem-programs h2, .kyem-contact h2 { margin: 0 0 .7rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 2px solid #0f5db0; padding-bottom: .3rem; }
+  .kyem-hero {
+    display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: center;
+    padding: 2rem 1.8rem;
+    background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.6)),
+                url('images/banner or background.png') center/cover no-repeat;
+    border-radius: 12px; color: #fff;
+    border-left: 6px solid #c8102e;
+  }
+  .kyem-logo { max-width: 340px; width: 100%; display: block; border-radius: 6px; background: rgba(255,255,255,.92); padding: .5rem .75rem; }
+  .kyem-hero-text { display: flex; flex-direction: column; gap: .6rem; }
+  .kyem-tagline { margin: 0; font-size: 1rem; color: #ffe066; font-style: italic; font-weight: 600; }
+  .kyem-mission { margin: 0; font-size: .9rem; color: #e8f0ff; max-width: 620px; line-height: 1.6; }
+  .kyem-hero-actions { display: flex; flex-direction: column; gap: .6rem; flex-shrink: 0; min-width: 200px; }
+  .kyem-btn-primary { background: #c8102e; color: #fff; border: 2px solid #c8102e; border-radius: 8px; padding: .6rem 1rem; text-decoration: none; font-weight: 700; font-size: .9rem; text-align: center; }
+  .kyem-btn-primary:hover { background: #a50d25; border-color: #a50d25; }
+  .kyem-btn-secondary { background: rgba(255,255,255,.1); color: #ffe066; border: 1px solid rgba(255,224,102,.6); border-radius: 8px; padding: .6rem 1rem; text-decoration: none; font-size: .88rem; text-align: center; font-weight: 600; }
+  .kyem-btn-secondary:hover { background: rgba(255,224,102,.2); }
+  .kyem-quicklinks h2, .kyem-programs h2, .kyem-contact h2 { margin: 0 0 .7rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 3px solid #c8102e; padding-bottom: .3rem; }
   .kyem-ql-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .7rem; }
   .kyem-ql { display: flex; flex-direction: column; gap: .2rem; padding: .75rem; border: 1px solid #c5d8f0; border-radius: 10px; background: #f7faff; text-decoration: none; color: #1a2f4e; transition: border-color .15s; }
-  .kyem-ql:hover { border-color: #0f5db0; background: #eef5ff; }
+  .kyem-ql:hover { border-color: #c8102e; background: #fff5f5; }
   .kyem-ql-icon { font-size: 1.4rem; }
   .kyem-ql strong { font-size: .9rem; color: #0a2d5a; }
   .kyem-ql span { font-size: .8rem; color: #5a6f8d; }
@@ -1448,8 +1501,10 @@
     .docs-grid { grid-template-columns: 1fr; }
     .ics-grid { grid-template-columns: 1fr; }
     .news-grid { grid-template-columns: 1fr; }
+    .news-pio-grid { grid-template-columns: 1fr; }
     .kyem-hero { grid-template-columns: 1fr; }
     .kyem-hero-actions { flex-direction: row; }
+    .kyem-logo { max-width: 260px; }
     .kyem-ql-grid { grid-template-columns: repeat(2, 1fr); }
     .kyem-prog-grid { grid-template-columns: 1fr; }
     .kyem-contact-grid { grid-template-columns: repeat(2, 1fr); }
