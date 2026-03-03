@@ -286,6 +286,8 @@
   const ORG_MASTER_SHEET_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/edit?usp=sharing&ouid=108896342127940549606&rtpof=true&sd=true';
   const ORG_MASTER_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/export?format=csv';
   const OPERATION_SNAPSHOTS_KEY = 'eoc-operation-snapshots-v1';
+  const KYEM_NEWS_URL = 'https://www.kyem.ky.gov/inside-kyem/news';
+  const KYEM_DIRECTORY_URL = 'https://www.kyem.ky.gov/inside-kyem/kyem-directory';
 
   const flattenRoles = (node) => [node, ...node.children.flatMap(flattenRoles)];
   const roleList = flattenRoles(orgChart);
@@ -303,9 +305,26 @@
     return acc;
   }, {});
 
+  const findMasterContactByName = (name) => masterContacts.find((c) => (c.name || '').toLowerCase() === name.toLowerCase());
+  $: pioDirector = findMasterContactByName('Gordon Boyd') || { name: 'Gordon Boyd', title: 'Public Information Officer (PIO)', agency: 'Kentucky Emergency Management', email: 'gordon.boyd@ky.gov', phone: '502-607-1689' };
+  $: socialMediaDirector = findMasterContactByName('David Davis') || { name: 'David Davis', title: 'Social Media Director', agency: 'Kentucky Emergency Management', email: 'david.davis@ky.gov', phone: '502-607-1650' };
+
+  const pageToHash = {
+    home: '#home',
+    training: '#training',
+    'org-chart': '#org-chart',
+    news: '#news',
+    docs: '#docs'
+  };
+
+  const hashToPage = Object.fromEntries(Object.entries(pageToHash).map(([page, hash]) => [hash, page]));
+
   function setPage(page) {
-    currentPage = page;
-    window.location.hash = page === 'org-chart' ? '#org-chart' : page === 'training' ? '#training' : page === 'docs' ? '#docs' : '#home';
+    currentPage = Object.hasOwn(pageToHash, page) ? page : 'home';
+
+    if (typeof window !== 'undefined') {
+      window.location.hash = pageToHash[currentPage];
+    }
   }
 
   function handleRoleSelect(event) {
@@ -626,13 +645,7 @@
 
   onMount(() => {
     const syncPageFromHash = () => {
-      currentPage = window.location.hash === '#org-chart'
-        ? 'org-chart'
-        : window.location.hash === '#training'
-          ? 'training'
-          : window.location.hash === '#docs'
-            ? 'docs'
-            : 'home';
+      currentPage = hashToPage[window.location.hash] || 'home';
     };
 
     syncPageFromHash();
@@ -675,6 +688,7 @@
   <a href="#home" class:active={currentPage === 'home'} on:click|preventDefault={() => setPage('home')}>Home</a>
   <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training site</a>
   <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org chart page</a>
+  <a href="#news" class:active={currentPage === 'news'} on:click|preventDefault={() => setPage('news')}>KYEM news</a>
   <a href="#docs" class:active={currentPage === 'docs'} on:click|preventDefault={() => setPage('docs')}>Backend docs</a>
 </nav>
 
@@ -700,9 +714,62 @@
       </article>
 
       <article class="home-card">
+        <h2>KYEM News (Improved Sample)</h2>
+        <p>Functional links, PIO access, and social media contact visibility.</p>
+        <a href="#news" on:click|preventDefault={() => setPage('news')}>Open News Page</a>
+      </article>
+
+      <article class="home-card">
         <h2>Backend Docs & Data Links</h2>
         <p>Show where registration and org chart data are stored/synced.</p>
         <a href="#docs" on:click|preventDefault={() => setPage('docs')}>Open Backend Docs</a>
+      </article>
+    </section>
+  </main>
+{:else if currentPage === 'news'}
+  <main class="layout">
+    <header>
+      <p class="eyebrow">IMPROVED SAMPLE PAGE</p>
+      <h1>KYEM News & Public Information Access</h1>
+      <p class="intro">This sample improves the existing news area with clear functional links and direct access to PIO and social media leadership.</p>
+    </header>
+
+    <section class="home-grid" aria-label="News and information links">
+      <article class="home-card">
+        <h2>Primary News Feed</h2>
+        <p>Official KYEM news page.</p>
+        <a href={KYEM_NEWS_URL} target="_blank" rel="noopener noreferrer">Open KYEM News</a>
+      </article>
+
+      <article class="home-card">
+        <h2>KYEM Directory</h2>
+        <p>Official KYEM directory page.</p>
+        <a href={KYEM_DIRECTORY_URL} target="_blank" rel="noopener noreferrer">Open KYEM Directory</a>
+      </article>
+
+      <article class="home-card">
+        <h2>PIO Contact</h2>
+        <p><strong>{pioDirector.name}</strong></p>
+        <p>{pioDirector.title}</p>
+        <p>{pioDirector.agency}</p>
+        <a href={`mailto:${pioDirector.email}`}>{pioDirector.email}</a>
+        <a href={`tel:${pioDirector.phone}`}>{pioDirector.phone}</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Social Media Contact</h2>
+        <p><strong>{socialMediaDirector.name}</strong></p>
+        <p>{socialMediaDirector.title}</p>
+        <p>{socialMediaDirector.agency}</p>
+        <a href={`mailto:${socialMediaDirector.email}`}>{socialMediaDirector.email}</a>
+        <a href={`tel:${socialMediaDirector.phone}`}>{socialMediaDirector.phone}</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Social Channels</h2>
+        <p>Operational public information links for rapid sharing.</p>
+        <a href="https://x.com/KYEM" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+        <a href="https://www.facebook.com/KYEmergencyManagement" target="_blank" rel="noopener noreferrer">Facebook</a>
       </article>
     </section>
   </main>
