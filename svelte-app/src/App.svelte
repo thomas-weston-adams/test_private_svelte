@@ -1,5 +1,8 @@
 <script>
+  import { onMount } from 'svelte';
   import trainings from './trainings.json';
+  import OrgNode from './OrgNode.svelte';
+  import { defaultAssignments, defaultMasterContacts, orgChart } from './orgChartData';
 
   const easternIsoFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' });
   const easternDateFormatter = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York' });
@@ -19,7 +22,27 @@
   let intendedCourse = '';
   let classSearch = '';
 
-  const counties = ['Adair', 'Boyd', 'Campbell', 'Fayette', 'Franklin', 'Jefferson', 'Perry', 'Rowan', 'Warren'];
+  const counties = [
+    'Adair', 'Allen', 'Anderson', 'Ballard', 'Barren', 'Bath', 'Bell', 'Boone', 'Bourbon', 'Boyd',
+    'Boyle', 'Bracken', 'Breathitt', 'Breckinridge', 'Bullitt', 'Butler', 'Caldwell', 'Calloway', 'Campbell', 'Carlisle',
+    'Carroll', 'Carter', 'Casey', 'Christian', 'Clark', 'Clay', 'Clinton', 'Crittenden', 'Cumberland', 'Daviess',
+    'Edmonson', 'Elliott', 'Estill', 'Fayette', 'Fleming', 'Floyd', 'Franklin', 'Fulton', 'Gallatin', 'Garrard',
+    'Grant', 'Graves', 'Grayson', 'Green', 'Greenup', 'Hancock', 'Hardin', 'Harlan', 'Harrison', 'Hart',
+    'Henderson', 'Henry', 'Hickman', 'Hopkins', 'Jackson', 'Jefferson', 'Jessamine', 'Johnson', 'Kenton', 'Knott',
+    'Knox', 'Larue', 'Laurel', 'Lawrence', 'Lee', 'Leslie', 'Letcher', 'Lewis', 'Lincoln', 'Livingston',
+    'Logan', 'Lyon', 'McCracken', 'McCreary', 'McLean', 'Madison', 'Magoffin', 'Marion', 'Marshall', 'Martin',
+    'Mason', 'Meade', 'Menifee', 'Mercer', 'Metcalfe', 'Monroe', 'Montgomery', 'Morgan', 'Muhlenberg', 'Nelson',
+    'Nicholas', 'Ohio', 'Oldham', 'Owen', 'Owsley', 'Pendleton', 'Perry', 'Pike', 'Powell', 'Pulaski',
+    'Robertson', 'Rockcastle', 'Rowan', 'Russell', 'Scott', 'Shelby', 'Simpson', 'Spencer', 'Taylor', 'Todd',
+    'Trigg', 'Trimble', 'Union', 'Warren', 'Washington', 'Wayne', 'Webster', 'Whitley', 'Wolfe', 'Woodford'
+  ];
+  const states = [
+    'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida',
+    'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
+    'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire',
+    'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island',
+    'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'
+  ];
   const payOptions = ['No', 'Yes'];
   const payers = ['Self', 'Agency', 'Grant', 'Other'];
   const jobCategories = ['Emergency Management', 'Fire', 'Law Enforcement', 'Public Health', 'Healthcare', 'Public Works', 'Volunteer'];
@@ -34,6 +57,7 @@
     phone: '',
     cell: '',
     email: '',
+    state: 'Kentucky',
     county: '',
     beingPaid: '',
     paidBy: '',
@@ -215,6 +239,7 @@
     registrationForm.title &&
     registrationForm.phone &&
     registrationForm.email &&
+    registrationForm.state &&
     registrationForm.county &&
     registrationForm.beingPaid &&
     registrationForm.jobCategory &&
@@ -222,11 +247,757 @@
     registrationForm.selectedClassId &&
     registrationForm.ageConfirmed &&
     registrationForm.prereqAgreement;
+
+
+  let currentPage = 'home';
+  let selectedRoleId = orgChart.id;
+  let zoom = 105;
+  let chartViewMode = 'landscape';
+  let chartVisualization = 'tree';
+  let operationPeriodLabel = '';
+  let selectedSnapshotId = '';
+
+  let masterContacts = [...defaultMasterContacts];
+  let assignmentsByRole = { ...defaultAssignments };
+  let assignmentHistory = [];
+  let operationSnapshots = [];
+  let contactForm = { id: '', name: '', agency: '', title: '', email: '', phone: '' };
+  let selectedMasterContactId = '';
+  let masterContactSearch = '';
+  let googleContactsCsvUrl = '';
+  let googlePushWebhookUrl = '';
+  let googleSyncMessage = '';
+  let googleSyncError = '';
+  let googleWebhookToken = '';
+
+  let ics203Form = {
+    incidentName: 'Kentucky Emergency Operations Center',
+    operationalPeriod: '',
+    preparedBy: '',
+    approvedBy: ''
+  };
+
+  const CONTACTS_KEY = 'eoc-master-contacts-v1';
+  const ASSIGNMENTS_KEY = 'eoc-assignments-v1';
+  const HISTORY_KEY = 'eoc-assignment-history-v1';
+  const GOOGLE_CONTACTS_URL_KEY = 'eoc-google-contacts-csv-url-v1';
+  const GOOGLE_PUSH_URL_KEY = 'eoc-google-push-webhook-url-v1';
+  const GOOGLE_PUSH_TOKEN_KEY = 'eoc-google-push-token-v1';
+  const ORG_MASTER_SHEET_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/edit?usp=sharing&ouid=108896342127940549606&rtpof=true&sd=true';
+  const ORG_MASTER_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/export?format=csv';
+  const OPERATION_SNAPSHOTS_KEY = 'eoc-operation-snapshots-v1';
+  const KYEM_NEWS_URL = 'https://www.kyem.ky.gov/inside-kyem/news';
+  const KYEM_DIRECTORY_URL = 'https://www.kyem.ky.gov/inside-kyem/kyem-directory';
+
+  const flattenRoles = (node) => [node, ...node.children.flatMap(flattenRoles)];
+  const roleList = flattenRoles(orgChart);
+  const roleById = Object.fromEntries(roleList.map((role) => [role.id, role]));
+
+  const toContactId = (name) => `contact-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+
+  $: contactsById = Object.fromEntries(masterContacts.map((contact) => [contact.id, contact]));
+  $: selectedRole = roleById[selectedRoleId] || orgChart;
+  $: selectedAssignedContact = contactsById[assignmentsByRole[selectedRole.id]];
+  $: populatedRoles = roleList.filter((role) => Boolean(assignmentsByRole[role.id])).length;
+  $: sortedMasterContacts = [...masterContacts].sort((a, b) => a.name.localeCompare(b.name));
+  $: recentContactByRole = assignmentHistory.reduce((acc, row) => {
+    if (!acc[row.roleId] && contactsById[row.contactId]) acc[row.roleId] = contactsById[row.contactId];
+    return acc;
+  }, {});
+
+  const findMasterContactByName = (name) => masterContacts.find((c) => (c.name || '').toLowerCase() === name.toLowerCase());
+  $: pioDirector = findMasterContactByName('Gordon Boyd') || { name: 'Gordon Boyd', title: 'Public Information Officer (PIO)', agency: 'Kentucky Emergency Management', email: 'gordon.boyd@ky.gov', phone: '502-607-1689' };
+  $: socialMediaDirector = findMasterContactByName('David Davis') || { name: 'David Davis', title: 'Social Media Director', agency: 'Kentucky Emergency Management', email: 'david.davis@ky.gov', phone: '502-607-1650' };
+
+  const pageToHash = {
+    home: '#home',
+    training: '#training',
+    'org-chart': '#org-chart',
+    news: '#news',
+    docs: '#docs'
+  };
+
+  const hashToPage = Object.fromEntries(Object.entries(pageToHash).map(([page, hash]) => [hash, page]));
+
+  function setPage(page) {
+    currentPage = Object.hasOwn(pageToHash, page) ? page : 'home';
+
+    if (typeof window !== 'undefined') {
+      window.location.hash = pageToHash[currentPage];
+    }
+  }
+
+  function handleRoleSelect(event) {
+    const roleId = event.detail.roleId;
+    selectedRoleId = roleId;
+    selectedMasterContactId = '';
+    hydrateFormFromAssignedContact();
+
+    if (!assignmentsByRole[roleId] && recentContactByRole[roleId]) {
+      applyContactToForm(recentContactByRole[roleId]);
+    }
+  }
+
+  function hydrateFormFromAssignedContact() {
+    if (selectedAssignedContact) {
+      contactForm = { ...selectedAssignedContact };
+      return;
+    }
+
+    contactForm = { id: '', name: '', agency: '', title: selectedRole.name, email: '', phone: '' };
+  }
+
+
+  function applyContactToForm(contact) {
+    if (!contact) return;
+    selectedMasterContactId = contact.id || '';
+    contactForm = {
+      id: contact.id || '',
+      name: contact.name || contactForm.name,
+      agency: contact.agency || '',
+      title: contact.title || selectedRole.name,
+      email: contact.email || '',
+      phone: contact.phone || ''
+    };
+  }
+
+  function selectMasterContactById() {
+    if (!selectedMasterContactId) return;
+    const contact = masterContacts.find((item) => item.id === selectedMasterContactId);
+    applyContactToForm(contact);
+  }
+
+  function selectMasterContactByName() {
+    const q = masterContactSearch.trim().toLowerCase();
+    if (!q) return;
+
+    const contact = masterContacts.find((item) => item.name.toLowerCase() === q);
+    if (contact) {
+      applyContactToForm(contact);
+    }
+  }
+
+  function handleNameInput() {
+    const q = contactForm.name.trim().toLowerCase();
+    if (!q) return;
+
+    const exactMatch = masterContacts.find((contact) => contact.name.toLowerCase() === q);
+    if (exactMatch) {
+      applyContactToForm(exactMatch);
+      return;
+    }
+
+    const startsWithMatches = masterContacts.filter((contact) => contact.name.toLowerCase().startsWith(q));
+    if (startsWithMatches.length === 1) {
+      applyContactToForm(startsWithMatches[0]);
+    }
+  }
+
+  function handleEmailInput() {
+    const q = contactForm.email.trim().toLowerCase();
+    if (!q) return;
+
+    const emailMatch = masterContacts.find((contact) => contact.email.toLowerCase() === q);
+    if (emailMatch) {
+      applyContactToForm(emailMatch);
+    }
+  }
+
+  function saveRoleAssignment() {
+    if (!contactForm.name || !contactForm.email) return;
+
+    const existing = masterContacts.find((contact) => contact.email.toLowerCase() === contactForm.email.toLowerCase());
+    const savedContact = {
+      ...contactForm,
+      id: existing?.id || contactForm.id || toContactId(contactForm.name),
+      title: contactForm.title || selectedRole.name
+    };
+
+    if (existing) {
+      masterContacts = masterContacts.map((contact) => (contact.id === existing.id ? savedContact : contact));
+    } else {
+      masterContacts = [...masterContacts, savedContact];
+    }
+
+    assignmentsByRole = { ...assignmentsByRole, [selectedRole.id]: savedContact.id };
+    assignmentHistory = [
+      {
+        timestamp: new Date().toISOString(),
+        roleId: selectedRole.id,
+        roleName: selectedRole.name,
+        contactId: savedContact.id,
+        contactName: savedContact.name
+      },
+      ...assignmentHistory
+    ].slice(0, 200);
+  }
+
+  function clearAssignment() {
+    const { [selectedRole.id]: removed, ...rest } = assignmentsByRole;
+    assignmentsByRole = rest;
+    hydrateFormFromAssignedContact();
+  }
+
+  function printOrgChart() {
+    window.print();
+  }
+
+  function parseContactsCsv(csv) {
+    const [headerLine, ...lines] = csv.trim().split(/\r?\n/);
+    if (!headerLine || lines.length === 0) return [];
+
+    const headers = headerLine.split(',').map((h) => h.trim().toLowerCase());
+    const getIndex = (name) => headers.findIndex((h) => h === name);
+
+    const nameIndex = getIndex('name');
+    const agencyIndex = getIndex('agency');
+    const titleIndex = getIndex('title');
+    const emailIndex = getIndex('email');
+    const phoneIndex = getIndex('phone');
+
+    if (nameIndex === -1 || emailIndex === -1) {
+      throw new Error('CSV must include at least name and email columns.');
+    }
+
+    return lines
+      .map((line) => line.split(',').map((cell) => cell.trim()))
+      .filter((row) => row[nameIndex] && row[emailIndex])
+      .map((row) => ({
+        id: toContactId(row[nameIndex]),
+        name: row[nameIndex],
+        agency: agencyIndex >= 0 ? (row[agencyIndex] || '') : '',
+        title: titleIndex >= 0 ? (row[titleIndex] || '') : '',
+        email: row[emailIndex],
+        phone: phoneIndex >= 0 ? (row[phoneIndex] || '') : ''
+      }));
+  }
+
+  async function importContactsFromGoogleSheet() {
+    googleSyncMessage = '';
+    googleSyncError = '';
+
+    if (!googleContactsCsvUrl) {
+      googleSyncError = 'Add a Google Sheets CSV publish URL first.';
+      return;
+    }
+
+    try {
+      const response = await fetch(googleContactsCsvUrl);
+      if (!response.ok) throw new Error(`Google sheet returned ${response.status}`);
+      const csv = await response.text();
+      const incoming = parseContactsCsv(csv);
+
+      const mergedByEmail = new Map(masterContacts.map((contact) => [contact.email.toLowerCase(), contact]));
+      incoming.forEach((contact) => mergedByEmail.set(contact.email.toLowerCase(), contact));
+      masterContacts = [...mergedByEmail.values()];
+      googleSyncMessage = `Imported ${incoming.length} contacts from Google Sheets.`;
+    } catch (error) {
+      googleSyncError = `Could not import contacts: ${error.message}`;
+    }
+  }
+
+  async function pushContactsToGoogleSheet() {
+    googleSyncMessage = '';
+    googleSyncError = '';
+
+    if (!googlePushWebhookUrl) {
+      googleSyncError = 'Add an Apps Script webhook URL to push updates.';
+      return;
+    }
+
+    try {
+      const response = await fetch(googlePushWebhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(googleWebhookToken ? { Authorization: `Bearer ${googleWebhookToken}` } : {})
+        },
+        body: JSON.stringify(buildGoogleWebhookPayload())
+      });
+      if (!response.ok) throw new Error(`Webhook returned ${response.status}`);
+      googleSyncMessage = 'Pushed current master contacts and assignments to Google webhook.';
+    } catch (error) {
+      googleSyncError = `Could not push to Google webhook: ${error.message}`;
+    }
+  }
+
+
+  function buildAssignmentsSnapshot() {
+    return roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return {
+        roleId: role.id,
+        roleName: role.name,
+        contactId: contact?.id || '',
+        contactName: contact?.name || '',
+        agency: contact?.agency || '',
+        title: contact?.title || '',
+        email: contact?.email || '',
+        phone: contact?.phone || ''
+      };
+    });
+  }
+
+  function buildGoogleWebhookPayload() {
+    return {
+      version: '1.0',
+      source: 'kyem-eoc-org-tool',
+      sentAt: new Date().toISOString(),
+      incident: ics203Form,
+      masterContacts,
+      assignments: buildAssignmentsSnapshot(),
+      assignmentHistory
+    };
+  }
+
+  function downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadIcs203Json() {
+    const roster = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return {
+        role: role.name,
+        assignedName: contact?.name || '',
+        agency: contact?.agency || '',
+        title: contact?.title || '',
+        email: contact?.email || '',
+        phone: contact?.phone || ''
+      };
+    });
+
+    const payload = {
+      form: 'ICS-203-compatible-draft',
+      incident: ics203Form,
+      generatedAt: new Date().toISOString(),
+      roster
+    };
+
+    downloadFile('ics-203-draft.json', JSON.stringify(payload, null, 2), 'application/json');
+  }
+
+  function downloadIcs203Html() {
+    const rosterRows = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return `<tr><td>${role.name}</td><td>${contact?.name || 'Vacant'}</td><td>${contact?.agency || ''}</td><td>${contact?.title || ''}</td><td>${contact?.phone || ''}</td></tr>`;
+    }).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 203 Draft</title><style>body{font-family:Arial,sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #333;padding:6px;text-align:left}</style></head><body><h1>ICS 203 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><p><strong>Operational Period:</strong> ${ics203Form.operationalPeriod}</p><p><strong>Prepared By:</strong> ${ics203Form.preparedBy} | <strong>Approved By:</strong> ${ics203Form.approvedBy}</p><table><thead><tr><th>Role</th><th>Name</th><th>Agency</th><th>Title</th><th>Phone</th></tr></thead><tbody>${rosterRows}</tbody></table></body></html>`;
+
+    downloadFile('ics-203-draft.html', html, 'text/html;charset=utf-8');
+  }
+
+  function downloadIcs207Html() {
+    const nodes = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return `<div style="border:1px solid #888;border-radius:8px;padding:8px;margin:6px;min-width:220px"><strong>${role.name}</strong><div>${contact?.name || 'Vacant'}</div><div>${contact?.phone || ''}</div></div>`;
+    }).join('');
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 207 Draft</title></head><body style="font-family:Arial,sans-serif;padding:16px"><h1>ICS 207 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><div style="display:flex;flex-wrap:wrap">${nodes}</div></body></html>`;
+    downloadFile('ics-207-draft.html', html, 'text/html;charset=utf-8');
+  }
+
+  function saveOperationSnapshot() {
+    const name = operationPeriodLabel.trim() || ics203Form.operationalPeriod.trim() || `Operation ${new Date().toLocaleString()}`;
+    const snapshot = {
+      id: `snapshot-${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      ics203Form: { ...ics203Form },
+      assignmentsByRole: { ...assignmentsByRole }
+    };
+
+    operationSnapshots = [snapshot, ...operationSnapshots].slice(0, 50);
+    selectedSnapshotId = snapshot.id;
+  }
+
+  function loadOperationSnapshot() {
+    const snap = operationSnapshots.find((item) => item.id === selectedSnapshotId);
+    if (!snap) return;
+    ics203Form = { ...snap.ics203Form };
+    assignmentsByRole = { ...snap.assignmentsByRole };
+  }
+
+  function downloadIcs207Csv() {
+    const header = 'Role,Assigned Name,Agency,Email,Phone';
+    const rows = roleList.map((role) => {
+      const contact = contactsById[assignmentsByRole[role.id]];
+      return [
+        role.name,
+        contact?.name || 'Vacant',
+        contact?.agency || '',
+        contact?.email || '',
+        contact?.phone || ''
+      ].map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',');
+    });
+
+    downloadFile('ics-207-staffing.csv', [header, ...rows].join('\n'), 'text/csv;charset=utf-8');
+  }
+
+  onMount(() => {
+    const syncPageFromHash = () => {
+      currentPage = hashToPage[window.location.hash] || 'home';
+    };
+
+    syncPageFromHash();
+    window.addEventListener('hashchange', syncPageFromHash);
+
+    const storedContacts = localStorage.getItem(CONTACTS_KEY);
+    const storedAssignments = localStorage.getItem(ASSIGNMENTS_KEY);
+    const storedHistory = localStorage.getItem(HISTORY_KEY);
+    const storedGoogleContactsUrl = localStorage.getItem(GOOGLE_CONTACTS_URL_KEY);
+    const storedGooglePushUrl = localStorage.getItem(GOOGLE_PUSH_URL_KEY);
+    const storedGooglePushToken = localStorage.getItem(GOOGLE_PUSH_TOKEN_KEY);
+    const storedSnapshots = localStorage.getItem(OPERATION_SNAPSHOTS_KEY);
+
+    if (storedContacts) masterContacts = JSON.parse(storedContacts);
+    if (storedAssignments) assignmentsByRole = JSON.parse(storedAssignments);
+    if (storedHistory) assignmentHistory = JSON.parse(storedHistory);
+    if (storedGoogleContactsUrl) googleContactsCsvUrl = storedGoogleContactsUrl;
+    if (!storedGoogleContactsUrl) googleContactsCsvUrl = ORG_MASTER_SHEET_CSV_URL;
+    if (storedGooglePushUrl) googlePushWebhookUrl = storedGooglePushUrl;
+    if (storedGooglePushToken) googleWebhookToken = storedGooglePushToken;
+    if (storedSnapshots) operationSnapshots = JSON.parse(storedSnapshots);
+
+    hydrateFormFromAssignedContact();
+
+    return () => window.removeEventListener('hashchange', syncPageFromHash);
+  });
+
+  $: if (currentPage === 'org-chart') {
+    localStorage.setItem(CONTACTS_KEY, JSON.stringify(masterContacts));
+    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(assignmentsByRole));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(assignmentHistory));
+    localStorage.setItem(GOOGLE_CONTACTS_URL_KEY, googleContactsCsvUrl);
+    localStorage.setItem(GOOGLE_PUSH_URL_KEY, googlePushWebhookUrl);
+    localStorage.setItem(GOOGLE_PUSH_TOKEN_KEY, googleWebhookToken);
+    localStorage.setItem(OPERATION_SNAPSHOTS_KEY, JSON.stringify(operationSnapshots));
+  }
 </script>
 
-<a class="skip-link" href="#results">Skip to training results</a>
+<nav class="page-nav" aria-label="Application pages">
+  <a href="#home" class:active={currentPage === 'home'} on:click|preventDefault={() => setPage('home')}>Home</a>
+  <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training site</a>
+  <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org chart page</a>
+  <a href="#news" class:active={currentPage === 'news'} on:click|preventDefault={() => setPage('news')}>KYEM news</a>
+  <a href="#docs" class:active={currentPage === 'docs'} on:click|preventDefault={() => setPage('docs')}>Backend docs</a>
+</nav>
 
-<main class="layout">
+{#if currentPage === 'home'}
+  <main class="layout home-layout">
+    <header>
+      <p class="eyebrow">START PAGE</p>
+      <h1>KYEM Operations Workspace</h1>
+      <p class="intro">Use this central hub to access current tools, and we can add more pages over time.</p>
+    </header>
+
+    <section class="home-grid" aria-label="Workspace pages">
+      <article class="home-card">
+        <h2>Training Site</h2>
+        <p>Training calendar, registration workflow, and class filters.</p>
+        <a href="#training" on:click|preventDefault={() => setPage('training')}>Open Training Page</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Org Chart Tool</h2>
+        <p>Interactive EOC staffing chart with contacts, history, and print output.</p>
+        <a href="#org-chart" on:click|preventDefault={() => setPage('org-chart')}>Open Org Chart Page</a>
+      </article>
+
+      <article class="home-card">
+        <h2>KYEM News (Improved Sample)</h2>
+        <p>Functional links, PIO access, and social media contact visibility.</p>
+        <a href="#news" on:click|preventDefault={() => setPage('news')}>Open News Page</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Backend Docs & Data Links</h2>
+        <p>Show where registration and org chart data are stored/synced.</p>
+        <a href="#docs" on:click|preventDefault={() => setPage('docs')}>Open Backend Docs</a>
+      </article>
+    </section>
+  </main>
+{:else if currentPage === 'news'}
+  <main class="layout">
+    <header>
+      <p class="eyebrow">IMPROVED SAMPLE PAGE</p>
+      <h1>KYEM News & Public Information Access</h1>
+      <p class="intro">This sample improves the existing news area with clear functional links and direct access to PIO and social media leadership.</p>
+    </header>
+
+    <section class="home-grid" aria-label="News and information links">
+      <article class="home-card">
+        <h2>Primary News Feed</h2>
+        <p>Official KYEM news page.</p>
+        <a href={KYEM_NEWS_URL} target="_blank" rel="noopener noreferrer">Open KYEM News</a>
+      </article>
+
+      <article class="home-card">
+        <h2>KYEM Directory</h2>
+        <p>Official KYEM directory page.</p>
+        <a href={KYEM_DIRECTORY_URL} target="_blank" rel="noopener noreferrer">Open KYEM Directory</a>
+      </article>
+
+      <article class="home-card">
+        <h2>PIO Contact</h2>
+        <p><strong>{pioDirector.name}</strong></p>
+        <p>{pioDirector.title}</p>
+        <p>{pioDirector.agency}</p>
+        <a href={`mailto:${pioDirector.email}`}>{pioDirector.email}</a>
+        <a href={`tel:${pioDirector.phone}`}>{pioDirector.phone}</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Social Media Contact</h2>
+        <p><strong>{socialMediaDirector.name}</strong></p>
+        <p>{socialMediaDirector.title}</p>
+        <p>{socialMediaDirector.agency}</p>
+        <a href={`mailto:${socialMediaDirector.email}`}>{socialMediaDirector.email}</a>
+        <a href={`tel:${socialMediaDirector.phone}`}>{socialMediaDirector.phone}</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Social Channels</h2>
+        <p>Operational public information links for rapid sharing.</p>
+        <a href="https://x.com/KYEM" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+        <a href="https://www.facebook.com/KYEmergencyManagement" target="_blank" rel="noopener noreferrer">Facebook</a>
+      </article>
+    </section>
+  </main>
+{:else if currentPage === 'docs'}
+  <main class="layout">
+    <header>
+      <p class="eyebrow">BACKEND REFERENCE</p>
+      <h1>Data Destinations & Integration Docs</h1>
+      <p class="intro">Use this page during demos to show where training registrations and org chart contacts go.</p>
+    </header>
+
+    <section class="home-grid" aria-label="Backend documentation links">
+      <article class="home-card">
+        <h2>Training Registration Destination</h2>
+        <p>Current behavior: registrations are downloaded as JSON drafts unless a registration API URL is configured in the app.</p>
+        <p class="hint">Configured endpoint value in app: <code>{REGISTRATION_API_URL || 'Not configured (local JSON export mode)'}</code></p>
+      </article>
+
+      <article class="home-card">
+        <h2>Org Chart Master Contact Sheet</h2>
+        <p>Primary sheet used for import/source-of-truth in this prototype.</p>
+        <a href={ORG_MASTER_SHEET_URL} target="_blank" rel="noopener noreferrer">Open Master Contact Google Sheet</a>
+        <p class="hint">CSV feed used by app: <code>{ORG_MASTER_SHEET_CSV_URL}</code></p>
+      </article>
+
+      <article class="home-card">
+        <h2>Apps Script Webhook Setup</h2>
+        <p>Deployment and payload contract for pushing org chart data into Google Sheets tabs.</p>
+        <p class="hint">Repo document: <code>docs/google-apps-script-webhook.md</code></p>
+      </article>
+    </section>
+  </main>
+{:else if currentPage === 'org-chart'}
+  <main class="layout org-layout">
+    <header>
+      <p class="eyebrow">EOC TOOLING PROTOTYPE</p>
+      <h1>Kentucky Emergency Management Org Chart</h1>
+      <p class="intro">Clickable, updateable role chart with assignment history, master contact sync, and print-ready output for reports/IAPs.</p>
+    </header>
+
+    <section class="org-toolbar no-print" aria-label="Org chart controls">
+      <p><strong>{populatedRoles}</strong> / {roleList.length} roles currently staffed</p>
+      <label>Zoom ({zoom}%) <input type="range" min="85" max="160" step="5" bind:value={zoom} /></label>
+      <div class="view-toggle" role="group" aria-label="Chart view mode">
+        <button type="button" class:active={chartViewMode === 'landscape'} on:click={() => (chartViewMode = 'landscape')}>Landscape view</button>
+        <button type="button" class:active={chartViewMode === 'portrait'} on:click={() => (chartViewMode = 'portrait')}>Portrait view</button>
+      </div>
+      <div class="view-toggle" role="group" aria-label="Visualization mode">
+        <button type="button" class:active={chartVisualization === 'tree'} on:click={() => (chartVisualization = 'tree')}>Tree</button>
+        <button type="button" class:active={chartVisualization === 'roster'} on:click={() => (chartVisualization = 'roster')}>Roster board</button>
+      </div>
+      <button type="button" on:click={printOrgChart}>Print / Save PDF</button>
+    </section>
+
+    <section class="google-sync no-print" aria-label="Google Sheets sync">
+      <h2>Google Sheets Contact Sync</h2>
+      <p class="hint">Publish your contacts sheet as CSV (name,agency,title,email,phone), then paste the URL below.</p>
+      <label>Google Sheet CSV URL<input bind:value={googleContactsCsvUrl} placeholder="https://docs.google.com/.../pub?output=csv" /></label>
+      <label>Apps Script Webhook URL (optional)<input bind:value={googlePushWebhookUrl} placeholder="https://script.google.com/macros/s/.../exec" /></label>
+      <label>Webhook Bearer Token (optional)<input bind:value={googleWebhookToken} placeholder="shared secret token" /></label>
+      <div class="panel-actions">
+        <button type="button" on:click={importContactsFromGoogleSheet}>Import from Google Sheet</button>
+        <button type="button" on:click={pushContactsToGoogleSheet}>Push current data to webhook</button>
+      </div>
+      <p class="hint">Webhook payload includes: incident metadata, master contacts, assignments snapshot, and assignment history.</p>
+      <p class="hint">Apps Script setup guide: <code>docs/google-apps-script-webhook.md</code></p>
+      {#if googleSyncMessage}<p class="submit-status">{googleSyncMessage}</p>{/if}
+      {#if googleSyncError}<p class="submit-error">{googleSyncError}</p>{/if}
+    </section>
+
+    <section class="ics-tools no-print" aria-label="ICS forms exports">
+      <h2>ICS 203 / 207 Compatibility</h2>
+      <div class="ics-grid">
+        <label>Incident Name<input bind:value={ics203Form.incidentName} /></label>
+        <label>Operational Period<input bind:value={ics203Form.operationalPeriod} placeholder="e.g. 2026-03-02 0800 to 2000" /></label>
+        <label>Prepared By<input bind:value={ics203Form.preparedBy} /></label>
+        <label>Approved By<input bind:value={ics203Form.approvedBy} /></label>
+      </div>
+      <div class="panel-actions">
+        <button type="button" on:click={downloadIcs203Json}>Download ICS 203 JSON</button>
+        <button type="button" on:click={downloadIcs207Csv}>Download ICS 207 CSV</button>
+        <button type="button" on:click={downloadIcs203Html}>Download ICS 203 HTML (Word-friendly)</button>
+        <button type="button" on:click={downloadIcs207Html}>Download ICS 207 HTML (Word-friendly)</button>
+      </div>
+    </section>
+
+
+    <section class="ics-tools no-print" aria-label="Operation period snapshots">
+      <h2>Operation Period Snapshots</h2>
+      <div class="ics-grid">
+        <label>Snapshot name<input bind:value={operationPeriodLabel} placeholder="e.g. OP 3 - Day Shift" /></label>
+        <label>Load snapshot
+          <select bind:value={selectedSnapshotId}>
+            <option value="">-- Select saved operation period --</option>
+            {#each operationSnapshots as snap}
+              <option value={snap.id}>{snap.name} ({snap.createdAt})</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+      <div class="panel-actions">
+        <button type="button" on:click={saveOperationSnapshot}>Save current operation period</button>
+        <button type="button" on:click={loadOperationSnapshot} disabled={!selectedSnapshotId}>Load selected operation period</button>
+      </div>
+      <p class="hint">Snapshots let you keep each operation period on file and quickly repopulate staffing from previous periods.</p>
+    </section>
+
+    <div class="org-two-col">
+      <section class={`chart-wrap ${chartViewMode === 'portrait' ? 'chart-portrait' : 'chart-landscape'}`} aria-label="Organizational chart">
+        <p class="chart-tip no-print">Tip: rotate your phone to landscape for a wider chart view.</p>
+        {#if chartVisualization === 'tree'}
+          <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
+            <ul class="tree">
+              <OrgNode
+                node={orgChart}
+                selectedRoleId={selectedRoleId}
+                assignmentsByRole={assignmentsByRole}
+                contactsById={contactsById}
+                viewMode={chartViewMode}
+                on:selectrole={handleRoleSelect}
+              />
+            </ul>
+          </div>
+        {:else}
+          <div class="roster-board">
+            {#each roleList as role}
+              {@const contact = contactsById[assignmentsByRole[role.id]]}
+              <button type="button" class="roster-card" on:click={() => handleRoleSelect({ detail: { roleId: role.id } })}>
+                <strong>{role.name}</strong>
+                <span>{contact?.name || 'Vacant'}</span>
+                <span>{contact?.phone || ''}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+
+      <aside class="role-panel no-print" aria-live="polite">
+        <h2>Role Assignment</h2>
+        <p><strong>Role:</strong> {selectedRole.name}</p>
+        {#if selectedAssignedContact}
+          <p class="assignment-state">Assigned to: <strong>{selectedAssignedContact.name}</strong></p>
+        {:else}
+          <p class="assignment-state vacant">Currently vacant</p>
+        {/if}
+
+        <form class="assign-form" on:submit|preventDefault={saveRoleAssignment}>
+          <datalist id="master-contact-names">{#each masterContacts as contact}<option value={contact.name} />{/each}</datalist>
+          <datalist id="master-contact-emails">{#each masterContacts as contact}<option value={contact.email} />{/each}</datalist>
+          <label>Select from master contact list
+            <select bind:value={selectedMasterContactId} on:change={selectMasterContactById}>
+              <option value="">-- Choose a contact from master list --</option>
+              {#each sortedMasterContacts as contact}
+                <option value={contact.id}>{contact.name} ({contact.agency || 'No agency listed'})</option>
+              {/each}
+            </select>
+          </label>
+          <label>Or search master contact by name
+            <input bind:value={masterContactSearch} list="master-contact-names" autocomplete="on" on:change={selectMasterContactByName} placeholder="Start typing a name from master contacts" />
+          </label>
+          <label>Name *<input bind:value={contactForm.name} list="master-contact-names" autocomplete="on" on:input={handleNameInput} required /></label>
+          <label>Agency<input bind:value={contactForm.agency} /></label>
+          <label>Role/Title<input bind:value={contactForm.title} /></label>
+          <label>Email *<input type="email" bind:value={contactForm.email} list="master-contact-emails" autocomplete="on" on:input={handleEmailInput} required /></label>
+          <label>Phone<input bind:value={contactForm.phone} /></label>
+          <p class="hint">If email matches a master contact, this role uses that existing contact. Otherwise a new master contact is created.</p>
+          <div class="panel-actions">
+            <button type="submit" class="primary">Save assignment</button>
+            <button type="button" on:click={clearAssignment}>Mark vacant</button>
+          </div>
+        </form>
+      </aside>
+    </div>
+
+    <section class="assignment-report" aria-label="Current role assignments">
+      <h2>Current Staffing Report (IAP-ready)</h2>
+      <table>
+        <thead><tr><th>Role</th><th>Assigned Person</th><th>Agency</th><th>Email</th><th>Phone</th></tr></thead>
+        <tbody>
+          {#each roleList as role}
+            {@const contact = contactsById[assignmentsByRole[role.id]]}
+            <tr>
+              <td>{role.name}</td>
+              <td>{contact?.name || 'Vacant'}</td>
+              <td>{contact?.agency || ''}</td>
+              <td>{contact?.email || ''}</td>
+              <td>{contact?.phone || ''}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="master-contacts no-print" aria-label="Master contact sheet">
+      <h2>Master Contact Sheet</h2>
+      <p>This list is the source of truth used by all role assignments.</p>
+      <table>
+        <thead><tr><th>Name</th><th>Agency</th><th>Title</th><th>Email</th><th>Phone</th></tr></thead>
+        <tbody>
+          {#each masterContacts as contact}
+            <tr>
+              <td>{contact.name}</td><td>{contact.agency}</td><td>{contact.title}</td><td>{contact.email}</td><td>{contact.phone}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="assignment-history" aria-label="Assignment change history">
+      <h2>Assignment Activity Log</h2>
+      <table>
+        <thead><tr><th>Time (UTC)</th><th>Role</th><th>Assigned to</th></tr></thead>
+        <tbody>
+          {#if assignmentHistory.length === 0}
+            <tr><td colspan="3">No assignment updates yet.</td></tr>
+          {:else}
+            {#each assignmentHistory.slice(0, 20) as row}
+              <tr><td>{row.timestamp}</td><td>{row.roleName}</td><td>{row.contactName}</td></tr>
+            {/each}
+          {/if}
+        </tbody>
+      </table>
+    </section>
+  </main>
+{:else}
+  <a class="skip-link" href="#results">Skip to training results</a>
+
+  <main class="layout">
   <header>
     <p class="eyebrow">UNOFFICIAL PROTOTYPE</p>
     <h1>Kentucky Emergency Management Training Calendar</h1>
@@ -312,6 +1083,12 @@
       <label>Cell<input bind:value={registrationForm.cell} /></label>
 
       <label>Email *<input type="email" bind:value={registrationForm.email} required /></label>
+      <label>State *
+        <select bind:value={registrationForm.state} required>
+          <option value="">-- Please select --</option>
+          {#each states as st}<option value={st}>{st}</option>{/each}
+        </select>
+      </label>
       <label>County *
         <select bind:value={registrationForm.county} required>
           <option value="">-- Please select --</option>
@@ -376,6 +1153,7 @@
     </form>
   </section>
 {/if}
+{/if}
 
 <style>
   .layout { max-width: 1300px; margin: 0 auto; background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.1); padding: 1.5rem; }
@@ -424,6 +1202,46 @@
   .modal-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .6rem; }
   .primary { background: #1c73d3; color: #fff; border: 1px solid #0f5db0; border-radius: 8px; }
 
+  .page-nav { max-width: 1300px; margin: 1rem auto .5rem; display: flex; gap: .5rem; }
+  .page-nav a { text-decoration: none; border: 1px solid #c5d0df; border-radius: 999px; padding: .35rem .8rem; color: #184778; background: #fff; }
+  .page-nav a.active { background: #e7f1ff; border-color: #8fb0d8; font-weight: 600; }
+
+  .home-layout { min-height: 62vh; }
+  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; align-items: stretch; }
+  .home-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: .9rem; background: #fbfdff; }
+  .home-card h2 { margin-top: 0; }
+  .home-card a { display: inline-block; margin-top: .4rem; text-decoration: none; border: 1px solid #0f5db0; border-radius: 8px; padding: .35rem .55rem; color: #0f5db0; }
+
+  .org-layout { overflow: hidden; }
+  .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
+  .org-toolbar p { margin: 0; }
+  .view-toggle { display: inline-flex; border: 1px solid #b8c7dc; border-radius: 8px; overflow: hidden; }
+  .view-toggle button { border: 0; background: #f8fbff; padding: .35rem .65rem; color: #12375f; }
+  .view-toggle button.active { background: #1c73d3; color: #fff; }
+  .roster-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .5rem; }
+  .roster-card { text-align: left; border: 1px solid #9fb4cf; border-radius: 8px; background: #f8fbff; padding: .55rem; display: grid; gap: .2rem; }
+  .google-sync, .ics-tools { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; margin-bottom: .8rem; background: #fbfdff; }
+  .google-sync h2, .ics-tools h2 { margin: 0 0 .35rem; font-size: 1rem; }
+  .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
+  .chart-tip { margin: 0 0 .4rem; color: #425b80; font-size: .86rem; }
+  .org-two-col { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: .8rem; align-items: start; }
+  .chart-wrap { overflow: auto; padding: .6rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 78vh; }
+  .chart-scale { transform: scale(var(--chart-zoom)); transform-origin: top left; width: calc(100% / var(--chart-zoom)); min-width: 1320px; }
+  .chart-wrap.chart-portrait .chart-scale { min-width: 920px; }
+  .chart-wrap.chart-portrait { max-height: 82vh; }
+  .tree { margin: 0 auto; padding: 0; display: table; }
+  :global(.tree ul) { margin: 0; padding: 0; display: table; }
+  .role-panel { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }
+  .role-panel h2 { margin-top: 0; }
+  .assign-form { display: grid; gap: .45rem; }
+  .hint { color: #5a6f8d; font-size: .82rem; margin: .25rem 0; }
+  .panel-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .assignment-state { color: #1d5f36; }
+  .assignment-state.vacant { color: #b45309; }
+  .assignment-report, .master-contacts, .assignment-history { margin-top: 1rem; }
+  .assignment-report table, .master-contacts table, .assignment-history table { width: 100%; min-width: 800px; border-collapse: collapse; }
+  .assignment-report th, .assignment-report td, .master-contacts th, .master-contacts td, .assignment-history th, .assignment-history td { border-bottom: 1px solid #e6edf6; padding: .45rem; text-align: left; font-size: .95rem; }
+
   button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #0f5db0; outline-offset: 2px; }
 
   @media (max-width: 900px) {
@@ -436,5 +1254,26 @@
     td { border: 0; padding: .45rem .35rem; }
     td::before { content: attr(data-label); display: block; color: #5a6f8d; font-size: .8rem; margin-bottom: .12rem; }
     .reg-grid { grid-template-columns: 1fr; }
+    .org-two-col { grid-template-columns: 1fr; }
+    .home-grid { grid-template-columns: 1fr; }
+    .ics-grid { grid-template-columns: 1fr; }
+    .role-panel { order: -1; }
+    .chart-scale { min-width: 980px; }
+  }
+
+  @media (max-width: 900px) and (orientation: portrait) {
+    .chart-scale { min-width: 1180px; }
+  }
+
+  @media (max-width: 900px) and (orientation: landscape) {
+    .chart-scale { min-width: 920px; }
+  }
+
+  @media print {
+    .no-print, .page-nav { display: none !important; }
+    :global(body) { background: white; }
+    .layout { box-shadow: none; border: 0; padding: 0; max-width: none; }
+    .chart-wrap { max-height: none; overflow: visible; border: 0; }
+    .chart-scale { transform: scale(.78); transform-origin: top left; width: 128%; }
   }
 </style>
