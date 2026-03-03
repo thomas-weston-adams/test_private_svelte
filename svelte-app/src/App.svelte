@@ -251,19 +251,12 @@
 
   let currentPage = 'home';
   let selectedRoleId = orgChart.id;
-  let zoom = 105;
-  let chartViewMode = 'landscape';
-  let chartVisualization = 'tree';
-  let operationPeriodLabel = '';
-  let selectedSnapshotId = '';
+  let zoom = 65;
 
   let masterContacts = [...defaultMasterContacts];
   let assignmentsByRole = { ...defaultAssignments };
   let assignmentHistory = [];
-  let operationSnapshots = [];
   let contactForm = { id: '', name: '', agency: '', title: '', email: '', phone: '' };
-  let selectedMasterContactId = '';
-  let masterContactSearch = '';
   let googleContactsCsvUrl = '';
   let googlePushWebhookUrl = '';
   let googleSyncMessage = '';
@@ -283,9 +276,6 @@
   const GOOGLE_CONTACTS_URL_KEY = 'eoc-google-contacts-csv-url-v1';
   const GOOGLE_PUSH_URL_KEY = 'eoc-google-push-webhook-url-v1';
   const GOOGLE_PUSH_TOKEN_KEY = 'eoc-google-push-token-v1';
-  const ORG_MASTER_SHEET_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/edit?usp=sharing&ouid=108896342127940549606&rtpof=true&sd=true';
-  const ORG_MASTER_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/183yMzgYMxwMmE6E3xIjazH5mgb__WwoY/export?format=csv';
-  const OPERATION_SNAPSHOTS_KEY = 'eoc-operation-snapshots-v1';
 
   const flattenRoles = (node) => [node, ...node.children.flatMap(flattenRoles)];
   const roleList = flattenRoles(orgChart);
@@ -297,26 +287,15 @@
   $: selectedRole = roleById[selectedRoleId] || orgChart;
   $: selectedAssignedContact = contactsById[assignmentsByRole[selectedRole.id]];
   $: populatedRoles = roleList.filter((role) => Boolean(assignmentsByRole[role.id])).length;
-  $: sortedMasterContacts = [...masterContacts].sort((a, b) => a.name.localeCompare(b.name));
-  $: recentContactByRole = assignmentHistory.reduce((acc, row) => {
-    if (!acc[row.roleId] && contactsById[row.contactId]) acc[row.roleId] = contactsById[row.contactId];
-    return acc;
-  }, {});
 
   function setPage(page) {
     currentPage = page;
-    window.location.hash = page === 'org-chart' ? '#org-chart' : page === 'training' ? '#training' : page === 'docs' ? '#docs' : '#home';
+    window.location.hash = page === 'org-chart' ? '#org-chart' : page === 'training' ? '#training' : '#home';
   }
 
   function handleRoleSelect(event) {
-    const roleId = event.detail.roleId;
-    selectedRoleId = roleId;
-    selectedMasterContactId = '';
+    selectedRoleId = event.detail.roleId;
     hydrateFormFromAssignedContact();
-
-    if (!assignmentsByRole[roleId] && recentContactByRole[roleId]) {
-      applyContactToForm(recentContactByRole[roleId]);
-    }
   }
 
   function hydrateFormFromAssignedContact() {
@@ -326,62 +305,6 @@
     }
 
     contactForm = { id: '', name: '', agency: '', title: selectedRole.name, email: '', phone: '' };
-  }
-
-
-  function applyContactToForm(contact) {
-    if (!contact) return;
-    selectedMasterContactId = contact.id || '';
-    contactForm = {
-      id: contact.id || '',
-      name: contact.name || contactForm.name,
-      agency: contact.agency || '',
-      title: contact.title || selectedRole.name,
-      email: contact.email || '',
-      phone: contact.phone || ''
-    };
-  }
-
-  function selectMasterContactById() {
-    if (!selectedMasterContactId) return;
-    const contact = masterContacts.find((item) => item.id === selectedMasterContactId);
-    applyContactToForm(contact);
-  }
-
-  function selectMasterContactByName() {
-    const q = masterContactSearch.trim().toLowerCase();
-    if (!q) return;
-
-    const contact = masterContacts.find((item) => item.name.toLowerCase() === q);
-    if (contact) {
-      applyContactToForm(contact);
-    }
-  }
-
-  function handleNameInput() {
-    const q = contactForm.name.trim().toLowerCase();
-    if (!q) return;
-
-    const exactMatch = masterContacts.find((contact) => contact.name.toLowerCase() === q);
-    if (exactMatch) {
-      applyContactToForm(exactMatch);
-      return;
-    }
-
-    const startsWithMatches = masterContacts.filter((contact) => contact.name.toLowerCase().startsWith(q));
-    if (startsWithMatches.length === 1) {
-      applyContactToForm(startsWithMatches[0]);
-    }
-  }
-
-  function handleEmailInput() {
-    const q = contactForm.email.trim().toLowerCase();
-    if (!q) return;
-
-    const emailMatch = masterContacts.find((contact) => contact.email.toLowerCase() === q);
-    if (emailMatch) {
-      applyContactToForm(emailMatch);
-    }
   }
 
   function saveRoleAssignment() {
@@ -566,48 +489,6 @@
     downloadFile('ics-203-draft.json', JSON.stringify(payload, null, 2), 'application/json');
   }
 
-  function downloadIcs203Html() {
-    const rosterRows = roleList.map((role) => {
-      const contact = contactsById[assignmentsByRole[role.id]];
-      return `<tr><td>${role.name}</td><td>${contact?.name || 'Vacant'}</td><td>${contact?.agency || ''}</td><td>${contact?.title || ''}</td><td>${contact?.phone || ''}</td></tr>`;
-    }).join('');
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 203 Draft</title><style>body{font-family:Arial,sans-serif;padding:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #333;padding:6px;text-align:left}</style></head><body><h1>ICS 203 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><p><strong>Operational Period:</strong> ${ics203Form.operationalPeriod}</p><p><strong>Prepared By:</strong> ${ics203Form.preparedBy} | <strong>Approved By:</strong> ${ics203Form.approvedBy}</p><table><thead><tr><th>Role</th><th>Name</th><th>Agency</th><th>Title</th><th>Phone</th></tr></thead><tbody>${rosterRows}</tbody></table></body></html>`;
-
-    downloadFile('ics-203-draft.html', html, 'text/html;charset=utf-8');
-  }
-
-  function downloadIcs207Html() {
-    const nodes = roleList.map((role) => {
-      const contact = contactsById[assignmentsByRole[role.id]];
-      return `<div style="border:1px solid #888;border-radius:8px;padding:8px;margin:6px;min-width:220px"><strong>${role.name}</strong><div>${contact?.name || 'Vacant'}</div><div>${contact?.phone || ''}</div></div>`;
-    }).join('');
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>ICS 207 Draft</title></head><body style="font-family:Arial,sans-serif;padding:16px"><h1>ICS 207 Draft</h1><p><strong>Incident:</strong> ${ics203Form.incidentName}</p><div style="display:flex;flex-wrap:wrap">${nodes}</div></body></html>`;
-    downloadFile('ics-207-draft.html', html, 'text/html;charset=utf-8');
-  }
-
-  function saveOperationSnapshot() {
-    const name = operationPeriodLabel.trim() || ics203Form.operationalPeriod.trim() || `Operation ${new Date().toLocaleString()}`;
-    const snapshot = {
-      id: `snapshot-${Date.now()}`,
-      name,
-      createdAt: new Date().toISOString(),
-      ics203Form: { ...ics203Form },
-      assignmentsByRole: { ...assignmentsByRole }
-    };
-
-    operationSnapshots = [snapshot, ...operationSnapshots].slice(0, 50);
-    selectedSnapshotId = snapshot.id;
-  }
-
-  function loadOperationSnapshot() {
-    const snap = operationSnapshots.find((item) => item.id === selectedSnapshotId);
-    if (!snap) return;
-    ics203Form = { ...snap.ics203Form };
-    assignmentsByRole = { ...snap.assignmentsByRole };
-  }
-
   function downloadIcs207Csv() {
     const header = 'Role,Assigned Name,Agency,Email,Phone';
     const rows = roleList.map((role) => {
@@ -630,9 +511,7 @@
         ? 'org-chart'
         : window.location.hash === '#training'
           ? 'training'
-          : window.location.hash === '#docs'
-            ? 'docs'
-            : 'home';
+          : 'home';
     };
 
     syncPageFromHash();
@@ -644,16 +523,13 @@
     const storedGoogleContactsUrl = localStorage.getItem(GOOGLE_CONTACTS_URL_KEY);
     const storedGooglePushUrl = localStorage.getItem(GOOGLE_PUSH_URL_KEY);
     const storedGooglePushToken = localStorage.getItem(GOOGLE_PUSH_TOKEN_KEY);
-    const storedSnapshots = localStorage.getItem(OPERATION_SNAPSHOTS_KEY);
 
     if (storedContacts) masterContacts = JSON.parse(storedContacts);
     if (storedAssignments) assignmentsByRole = JSON.parse(storedAssignments);
     if (storedHistory) assignmentHistory = JSON.parse(storedHistory);
     if (storedGoogleContactsUrl) googleContactsCsvUrl = storedGoogleContactsUrl;
-    if (!storedGoogleContactsUrl) googleContactsCsvUrl = ORG_MASTER_SHEET_CSV_URL;
     if (storedGooglePushUrl) googlePushWebhookUrl = storedGooglePushUrl;
     if (storedGooglePushToken) googleWebhookToken = storedGooglePushToken;
-    if (storedSnapshots) operationSnapshots = JSON.parse(storedSnapshots);
 
     hydrateFormFromAssignedContact();
 
@@ -667,7 +543,6 @@
     localStorage.setItem(GOOGLE_CONTACTS_URL_KEY, googleContactsCsvUrl);
     localStorage.setItem(GOOGLE_PUSH_URL_KEY, googlePushWebhookUrl);
     localStorage.setItem(GOOGLE_PUSH_TOKEN_KEY, googleWebhookToken);
-    localStorage.setItem(OPERATION_SNAPSHOTS_KEY, JSON.stringify(operationSnapshots));
   }
 </script>
 
@@ -675,7 +550,6 @@
   <a href="#home" class:active={currentPage === 'home'} on:click|preventDefault={() => setPage('home')}>Home</a>
   <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training site</a>
   <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org chart page</a>
-  <a href="#docs" class:active={currentPage === 'docs'} on:click|preventDefault={() => setPage('docs')}>Backend docs</a>
 </nav>
 
 {#if currentPage === 'home'}
@@ -699,39 +573,9 @@
         <a href="#org-chart" on:click|preventDefault={() => setPage('org-chart')}>Open Org Chart Page</a>
       </article>
 
-      <article class="home-card">
-        <h2>Backend Docs & Data Links</h2>
-        <p>Show where registration and org chart data are stored/synced.</p>
-        <a href="#docs" on:click|preventDefault={() => setPage('docs')}>Open Backend Docs</a>
-      </article>
-    </section>
-  </main>
-{:else if currentPage === 'docs'}
-  <main class="layout">
-    <header>
-      <p class="eyebrow">BACKEND REFERENCE</p>
-      <h1>Data Destinations & Integration Docs</h1>
-      <p class="intro">Use this page during demos to show where training registrations and org chart contacts go.</p>
-    </header>
-
-    <section class="home-grid" aria-label="Backend documentation links">
-      <article class="home-card">
-        <h2>Training Registration Destination</h2>
-        <p>Current behavior: registrations are downloaded as JSON drafts unless a registration API URL is configured in the app.</p>
-        <p class="hint">Configured endpoint value in app: <code>{REGISTRATION_API_URL || 'Not configured (local JSON export mode)'}</code></p>
-      </article>
-
-      <article class="home-card">
-        <h2>Org Chart Master Contact Sheet</h2>
-        <p>Primary sheet used for import/source-of-truth in this prototype.</p>
-        <a href={ORG_MASTER_SHEET_URL} target="_blank" rel="noopener noreferrer">Open Master Contact Google Sheet</a>
-        <p class="hint">CSV feed used by app: <code>{ORG_MASTER_SHEET_CSV_URL}</code></p>
-      </article>
-
-      <article class="home-card">
-        <h2>Apps Script Webhook Setup</h2>
-        <p>Deployment and payload contract for pushing org chart data into Google Sheets tabs.</p>
-        <p class="hint">Repo document: <code>docs/google-apps-script-webhook.md</code></p>
+      <article class="home-card muted">
+        <h2>Upcoming Pages</h2>
+        <p>Reserved for additional tools you want to add next.</p>
       </article>
     </section>
   </main>
@@ -745,15 +589,7 @@
 
     <section class="org-toolbar no-print" aria-label="Org chart controls">
       <p><strong>{populatedRoles}</strong> / {roleList.length} roles currently staffed</p>
-      <label>Zoom ({zoom}%) <input type="range" min="85" max="160" step="5" bind:value={zoom} /></label>
-      <div class="view-toggle" role="group" aria-label="Chart view mode">
-        <button type="button" class:active={chartViewMode === 'landscape'} on:click={() => (chartViewMode = 'landscape')}>Landscape view</button>
-        <button type="button" class:active={chartViewMode === 'portrait'} on:click={() => (chartViewMode = 'portrait')}>Portrait view</button>
-      </div>
-      <div class="view-toggle" role="group" aria-label="Visualization mode">
-        <button type="button" class:active={chartVisualization === 'tree'} on:click={() => (chartVisualization = 'tree')}>Tree</button>
-        <button type="button" class:active={chartVisualization === 'roster'} on:click={() => (chartVisualization = 'roster')}>Roster board</button>
-      </div>
+      <label>Zoom ({zoom}%) <input type="range" min="60" max="130" step="5" bind:value={zoom} /></label>
       <button type="button" on:click={printOrgChart}>Print / Save PDF</button>
     </section>
 
@@ -784,60 +620,23 @@
       <div class="panel-actions">
         <button type="button" on:click={downloadIcs203Json}>Download ICS 203 JSON</button>
         <button type="button" on:click={downloadIcs207Csv}>Download ICS 207 CSV</button>
-        <button type="button" on:click={downloadIcs203Html}>Download ICS 203 HTML (Word-friendly)</button>
-        <button type="button" on:click={downloadIcs207Html}>Download ICS 207 HTML (Word-friendly)</button>
       </div>
-    </section>
-
-
-    <section class="ics-tools no-print" aria-label="Operation period snapshots">
-      <h2>Operation Period Snapshots</h2>
-      <div class="ics-grid">
-        <label>Snapshot name<input bind:value={operationPeriodLabel} placeholder="e.g. OP 3 - Day Shift" /></label>
-        <label>Load snapshot
-          <select bind:value={selectedSnapshotId}>
-            <option value="">-- Select saved operation period --</option>
-            {#each operationSnapshots as snap}
-              <option value={snap.id}>{snap.name} ({snap.createdAt})</option>
-            {/each}
-          </select>
-        </label>
-      </div>
-      <div class="panel-actions">
-        <button type="button" on:click={saveOperationSnapshot}>Save current operation period</button>
-        <button type="button" on:click={loadOperationSnapshot} disabled={!selectedSnapshotId}>Load selected operation period</button>
-      </div>
-      <p class="hint">Snapshots let you keep each operation period on file and quickly repopulate staffing from previous periods.</p>
     </section>
 
     <div class="org-two-col">
-      <section class={`chart-wrap ${chartViewMode === 'portrait' ? 'chart-portrait' : 'chart-landscape'}`} aria-label="Organizational chart">
+      <section class="chart-wrap" aria-label="Organizational chart">
         <p class="chart-tip no-print">Tip: rotate your phone to landscape for a wider chart view.</p>
-        {#if chartVisualization === 'tree'}
-          <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
-            <ul class="tree">
-              <OrgNode
-                node={orgChart}
-                selectedRoleId={selectedRoleId}
-                assignmentsByRole={assignmentsByRole}
-                contactsById={contactsById}
-                viewMode={chartViewMode}
-                on:selectrole={handleRoleSelect}
-              />
-            </ul>
-          </div>
-        {:else}
-          <div class="roster-board">
-            {#each roleList as role}
-              {@const contact = contactsById[assignmentsByRole[role.id]]}
-              <button type="button" class="roster-card" on:click={() => handleRoleSelect({ detail: { roleId: role.id } })}>
-                <strong>{role.name}</strong>
-                <span>{contact?.name || 'Vacant'}</span>
-                <span>{contact?.phone || ''}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
+        <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
+          <ul class="tree">
+            <OrgNode
+              node={orgChart}
+              selectedRoleId={selectedRoleId}
+              assignmentsByRole={assignmentsByRole}
+              contactsById={contactsById}
+              on:selectrole={handleRoleSelect}
+            />
+          </ul>
+        </div>
       </section>
 
       <aside class="role-panel no-print" aria-live="polite">
@@ -850,23 +649,10 @@
         {/if}
 
         <form class="assign-form" on:submit|preventDefault={saveRoleAssignment}>
-          <datalist id="master-contact-names">{#each masterContacts as contact}<option value={contact.name} />{/each}</datalist>
-          <datalist id="master-contact-emails">{#each masterContacts as contact}<option value={contact.email} />{/each}</datalist>
-          <label>Select from master contact list
-            <select bind:value={selectedMasterContactId} on:change={selectMasterContactById}>
-              <option value="">-- Choose a contact from master list --</option>
-              {#each sortedMasterContacts as contact}
-                <option value={contact.id}>{contact.name} ({contact.agency || 'No agency listed'})</option>
-              {/each}
-            </select>
-          </label>
-          <label>Or search master contact by name
-            <input bind:value={masterContactSearch} list="master-contact-names" autocomplete="on" on:change={selectMasterContactByName} placeholder="Start typing a name from master contacts" />
-          </label>
-          <label>Name *<input bind:value={contactForm.name} list="master-contact-names" autocomplete="on" on:input={handleNameInput} required /></label>
+          <label>Name *<input bind:value={contactForm.name} required /></label>
           <label>Agency<input bind:value={contactForm.agency} /></label>
           <label>Role/Title<input bind:value={contactForm.title} /></label>
-          <label>Email *<input type="email" bind:value={contactForm.email} list="master-contact-emails" autocomplete="on" on:input={handleEmailInput} required /></label>
+          <label>Email *<input type="email" bind:value={contactForm.email} required /></label>
           <label>Phone<input bind:value={contactForm.phone} /></label>
           <p class="hint">If email matches a master contact, this role uses that existing contact. Otherwise a new master contact is created.</p>
           <div class="panel-actions">
@@ -1140,28 +926,22 @@
   .page-nav a.active { background: #e7f1ff; border-color: #8fb0d8; font-weight: 600; }
 
   .home-layout { min-height: 62vh; }
-  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; align-items: stretch; }
+  .home-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
   .home-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: .9rem; background: #fbfdff; }
   .home-card h2 { margin-top: 0; }
   .home-card a { display: inline-block; margin-top: .4rem; text-decoration: none; border: 1px solid #0f5db0; border-radius: 8px; padding: .35rem .55rem; color: #0f5db0; }
+  .home-card.muted { background: #f8fafc; color: #64748b; }
 
   .org-layout { overflow: hidden; }
   .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
   .org-toolbar p { margin: 0; }
-  .view-toggle { display: inline-flex; border: 1px solid #b8c7dc; border-radius: 8px; overflow: hidden; }
-  .view-toggle button { border: 0; background: #f8fbff; padding: .35rem .65rem; color: #12375f; }
-  .view-toggle button.active { background: #1c73d3; color: #fff; }
-  .roster-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .5rem; }
-  .roster-card { text-align: left; border: 1px solid #9fb4cf; border-radius: 8px; background: #f8fbff; padding: .55rem; display: grid; gap: .2rem; }
   .google-sync, .ics-tools { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; margin-bottom: .8rem; background: #fbfdff; }
   .google-sync h2, .ics-tools h2 { margin: 0 0 .35rem; font-size: 1rem; }
   .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
   .chart-tip { margin: 0 0 .4rem; color: #425b80; font-size: .86rem; }
   .org-two-col { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: .8rem; align-items: start; }
-  .chart-wrap { overflow: auto; padding: .6rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 78vh; }
-  .chart-scale { transform: scale(var(--chart-zoom)); transform-origin: top left; width: calc(100% / var(--chart-zoom)); min-width: 1320px; }
-  .chart-wrap.chart-portrait .chart-scale { min-width: 920px; }
-  .chart-wrap.chart-portrait { max-height: 82vh; }
+  .chart-wrap { overflow: auto; padding: .5rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 70vh; }
+  .chart-scale { transform: scale(var(--chart-zoom)); transform-origin: top left; width: calc(100% / var(--chart-zoom)); min-width: 980px; }
   .tree { margin: 0 auto; padding: 0; display: table; }
   :global(.tree ul) { margin: 0; padding: 0; display: table; }
   .role-panel { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }
@@ -1191,15 +971,15 @@
     .home-grid { grid-template-columns: 1fr; }
     .ics-grid { grid-template-columns: 1fr; }
     .role-panel { order: -1; }
-    .chart-scale { min-width: 980px; }
+    .chart-scale { min-width: 760px; }
   }
 
   @media (max-width: 900px) and (orientation: portrait) {
-    .chart-scale { min-width: 1180px; }
+    .chart-scale { min-width: 900px; }
   }
 
   @media (max-width: 900px) and (orientation: landscape) {
-    .chart-scale { min-width: 920px; }
+    .chart-scale { min-width: 700px; }
   }
 
   @media print {
