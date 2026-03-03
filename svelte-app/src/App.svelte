@@ -21,6 +21,7 @@
   const BACKEND_DOCS_SHEET_URL = '';
   const BACKEND_DOCS_CSV_URL = '';
 
+
   const kyemPIOContacts = [
     {
       initials: 'GB',
@@ -104,6 +105,7 @@
   ];
   let submissionMessage = '';
   let submissionError = '';
+
 
   let showRegistrationModal = false;
   let intendedCourse = '';
@@ -1080,7 +1082,19 @@
 
     <section aria-label="Public information contacts">
       <h2 class="dir-section-label">Public Information Office</h2>
-      <p class="hint">For media inquiries, contact <a href="mailto:david.davis@ky-em.org">David Davis</a> or <a href="mailto:gordon.boyd@ky-em.org">Gordon Boyd</a>.</p>
+      <p class="hint">For media inquiries, contact <a href="mailto:david.davis@ky-em.org">David Davis</a> or <a href="mailto:gordon.boyd@ky-em.org">Gordon Boyd</a>, or use the form below.</p>
+
+      <div class="media-inquiry-section">
+        <h3 class="media-inquiry-heading">Submit a Media Inquiry</h3>
+        <iframe
+          class="media-inquiry-frame"
+          src="https://docs.google.com/forms/d/e/1FAIpQLSeEPiumFskrW3GmAtEpMs7dOwG7qa56U91BHjaqWtk8uL0MXg/viewform?embedded=true"
+          title="KYEM Media Inquiry Form"
+          frameborder="0"
+          marginheight="0"
+          marginwidth="0"
+        >Loading…</iframe>
+      </div>
 
       <div class="staff-grid">
         {#each kyemPIOContacts as person}
@@ -1440,6 +1454,11 @@
   .kyem-contact-grid p { margin: 0 0 .2rem; font-size: .87rem; color: #374f6e; }
   .kyem-contact-grid a { color: #0f5db0; text-decoration: none; }
   .kyem-contact-grid a:hover { text-decoration: underline; }
+
+  /* Media inquiry form */
+  .media-inquiry-section { margin-top: 1.2rem; background: #f4f8ff; border: 1px solid #d0dff0; border-radius: 12px; padding: 1.25rem 1.25rem 0; }
+  .media-inquiry-heading { margin: 0 0 .85rem; font-size: 1rem; color: #0a2d5a; font-weight: 700; }
+  .media-inquiry-frame { width: 100%; min-height: 680px; border: 0; border-radius: 0 0 12px 12px; display: block; }
 
   /* Staff directory */
   .dir-section-label { margin: 0 0 .4rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 2px solid #0f5db0; padding-bottom: .3rem; }
