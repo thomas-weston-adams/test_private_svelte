@@ -15,6 +15,10 @@
   // Set this to your deployed registration API endpoint to persist submissions.
   // Keep empty to use local JSON download fallback.
   const REGISTRATION_API_URL = '';
+
+  // Backend docs: set these to your master Google Sheet and CSV publish URLs.
+  const BACKEND_DOCS_SHEET_URL = '';
+  const BACKEND_DOCS_CSV_URL = '';
   let submissionMessage = '';
   let submissionError = '';
 
@@ -290,7 +294,8 @@
 
   function setPage(page) {
     currentPage = page;
-    window.location.hash = page === 'org-chart' ? '#org-chart' : page === 'training' ? '#training' : '#home';
+    const hashes = { 'org-chart': '#org-chart', training: '#training', news: '#news', directory: '#directory', twitter: '#twitter', docs: '#docs' };
+    window.location.hash = hashes[page] || '#home';
   }
 
   function handleRoleSelect(event) {
@@ -507,11 +512,14 @@
 
   onMount(() => {
     const syncPageFromHash = () => {
-      currentPage = window.location.hash === '#org-chart'
-        ? 'org-chart'
-        : window.location.hash === '#training'
-          ? 'training'
-          : 'home';
+      const h = window.location.hash;
+      currentPage = h === '#org-chart' ? 'org-chart'
+        : h === '#training' ? 'training'
+        : h === '#news' ? 'news'
+        : h === '#directory' ? 'directory'
+        : h === '#twitter' || h === '#x' ? 'twitter'
+        : h === '#docs' ? 'docs'
+        : 'home';
     };
 
     syncPageFromHash();
@@ -548,8 +556,12 @@
 
 <nav class="page-nav" aria-label="Application pages">
   <a href="#home" class:active={currentPage === 'home'} on:click|preventDefault={() => setPage('home')}>Home</a>
-  <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training site</a>
-  <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org chart page</a>
+  <a href="#training" class:active={currentPage === 'training'} on:click|preventDefault={() => setPage('training')}>Training</a>
+  <a href="#org-chart" class:active={currentPage === 'org-chart'} on:click|preventDefault={() => setPage('org-chart')}>Org Chart</a>
+  <a href="#news" class:active={currentPage === 'news'} on:click|preventDefault={() => setPage('news')}>News</a>
+  <a href="#directory" class:active={currentPage === 'directory'} on:click|preventDefault={() => setPage('directory')}>Directory</a>
+  <a href="#twitter" class:active={currentPage === 'twitter'} on:click|preventDefault={() => setPage('twitter')}>Twitter/X</a>
+  <a href="#docs" class:active={currentPage === 'docs'} on:click|preventDefault={() => setPage('docs')}>Backend Docs</a>
 </nav>
 
 {#if currentPage === 'home'}
@@ -573,9 +585,28 @@
         <a href="#org-chart" on:click|preventDefault={() => setPage('org-chart')}>Open Org Chart Page</a>
       </article>
 
-      <article class="home-card muted">
-        <h2>Upcoming Pages</h2>
-        <p>Reserved for additional tools you want to add next.</p>
+      <article class="home-card">
+        <h2>News</h2>
+        <p>Latest Kentucky Emergency Management news and announcements.</p>
+        <a href="#news" on:click|preventDefault={() => setPage('news')}>Open News</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Directory</h2>
+        <p>Contact directory for KYEM partners and agency personnel.</p>
+        <a href="#directory" on:click|preventDefault={() => setPage('directory')}>Open Directory</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Twitter / X</h2>
+        <p>KYEM official social media feed and announcements.</p>
+        <a href="#twitter" on:click|preventDefault={() => setPage('twitter')}>Open Twitter/X</a>
+      </article>
+
+      <article class="home-card">
+        <h2>Backend Docs</h2>
+        <p>Developer guides, master sheet links, and integration documentation.</p>
+        <a href="#docs" on:click|preventDefault={() => setPage('docs')}>Open Docs</a>
       </article>
     </section>
   </main>
@@ -713,7 +744,7 @@
       </table>
     </section>
   </main>
-{:else}
+{:else if currentPage === 'training'}
   <a class="skip-link" href="#results">Skip to training results</a>
 
   <main class="layout">
@@ -872,6 +903,80 @@
     </form>
   </section>
 {/if}
+
+{:else if currentPage === 'news'}
+  <main class="layout home-layout">
+    <header>
+      <p class="eyebrow">NEWS</p>
+      <h1>Kentucky Emergency Management News</h1>
+      <p class="intro">Latest announcements, alerts, and updates from KYEM.</p>
+    </header>
+    <div class="embed-shell">
+      <p class="hint">Embed a news feed or RSS widget here. Update <code>NEWS_FEED_URL</code> in App.svelte to connect a live source.</p>
+    </div>
+  </main>
+
+{:else if currentPage === 'directory'}
+  <main class="layout home-layout">
+    <header>
+      <p class="eyebrow">DIRECTORY</p>
+      <h1>KYEM Agency Directory</h1>
+      <p class="intro">Contact directory for KYEM partners and agency personnel.</p>
+    </header>
+    <div class="embed-shell">
+      <p class="hint">Connect to the master contacts Google Sheet or embed a directory widget here. Update <code>BACKEND_DOCS_SHEET_URL</code> in App.svelte to link a live source.</p>
+      {#if BACKEND_DOCS_SHEET_URL}
+        <a href={BACKEND_DOCS_SHEET_URL} target="_blank" rel="noopener noreferrer" class="doc-link">Open Directory Sheet</a>
+      {/if}
+    </div>
+  </main>
+
+{:else if currentPage === 'twitter'}
+  <main class="layout home-layout">
+    <header>
+      <p class="eyebrow">TWITTER / X</p>
+      <h1>KYEM Social Media Feed</h1>
+      <p class="intro">Official Kentucky Emergency Management Twitter/X feed and social announcements.</p>
+    </header>
+    <div class="embed-shell">
+      <p class="hint">Embed the official KYEM Twitter/X timeline widget here. Update <code>TWITTER_HANDLE</code> in App.svelte and add the Twitter embed script.</p>
+    </div>
+  </main>
+
+{:else if currentPage === 'docs'}
+  <main class="layout home-layout">
+    <header>
+      <p class="eyebrow">BACKEND DOCS</p>
+      <h1>Backend Documentation</h1>
+      <p class="intro">Developer guides, master sheet links, and integration documentation.</p>
+    </header>
+    <div class="docs-grid">
+      {#if BACKEND_DOCS_SHEET_URL}
+        <article class="home-card">
+          <h2>Master Google Sheet</h2>
+          <p>Primary data source for contacts and assignments.</p>
+          <a href={BACKEND_DOCS_SHEET_URL} target="_blank" rel="noopener noreferrer" class="doc-link">Open Sheet</a>
+        </article>
+      {/if}
+      {#if BACKEND_DOCS_CSV_URL}
+        <article class="home-card">
+          <h2>CSV Export</h2>
+          <p>Published CSV endpoint for programmatic access.</p>
+          <a href={BACKEND_DOCS_CSV_URL} target="_blank" rel="noopener noreferrer" class="doc-link">Open CSV</a>
+        </article>
+      {/if}
+      <article class="home-card">
+        <h2>Google Apps Script Webhook</h2>
+        <p>Setup guide for the Apps Script push webhook integration.</p>
+        <code>docs/google-apps-script-webhook.md</code>
+      </article>
+      <article class="home-card">
+        <h2>Registration API</h2>
+        <p>Connect a registration database via the <code>REGISTRATION_API_URL</code> constant in App.svelte.</p>
+      </article>
+    </div>
+  </main>
+
 {/if}
 
 <style>
@@ -930,7 +1035,9 @@
   .home-card { border: 1px solid #d7e0ec; border-radius: 10px; padding: .9rem; background: #fbfdff; }
   .home-card h2 { margin-top: 0; }
   .home-card a { display: inline-block; margin-top: .4rem; text-decoration: none; border: 1px solid #0f5db0; border-radius: 8px; padding: .35rem .55rem; color: #0f5db0; }
-  .home-card.muted { background: #f8fafc; color: #64748b; }
+  .embed-shell { border: 1px solid #d7e0ec; border-radius: 10px; padding: 1rem; background: #fbfdff; min-height: 200px; }
+  .docs-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+  .doc-link { display: inline-block; margin-top: .4rem; text-decoration: none; border: 1px solid #0f5db0; border-radius: 8px; padding: .35rem .55rem; color: #0f5db0; }
 
   .org-layout { overflow: hidden; }
   .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
@@ -969,6 +1076,7 @@
     .reg-grid { grid-template-columns: 1fr; }
     .org-two-col { grid-template-columns: 1fr; }
     .home-grid { grid-template-columns: 1fr; }
+    .docs-grid { grid-template-columns: 1fr; }
     .ics-grid { grid-template-columns: 1fr; }
     .role-panel { order: -1; }
     .chart-scale { min-width: 760px; }
