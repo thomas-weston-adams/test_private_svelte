@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import QRCode from 'qrcode';
   import trainings from './trainings.json';
   import OrgNode from './OrgNode.svelte';
   import { defaultAssignments, defaultMasterContacts, orgChart } from './orgChartData';
@@ -19,6 +20,29 @@
   // Backend docs: set these to your master Google Sheet and CSV publish URLs.
   const BACKEND_DOCS_SHEET_URL = '';
   const BACKEND_DOCS_CSV_URL = '';
+
+  const kyemPIOContacts = [
+    {
+      initials: 'GB',
+      name: 'Gordon P. Boyd',
+      title: 'Information Office Supervisor',
+      agency: 'KY Division of Emergency Management',
+      address: '110 Minuteman Parkway, Frankfort, KY 40601',
+      email: 'gordon.boyd@ky-em.org',
+      cell: '(502) 229-3304',
+      office: ''
+    },
+    {
+      initials: 'DD',
+      name: 'David Davis',
+      title: 'Public Information Officer',
+      agency: 'KY Division of Emergency Management',
+      address: '110 Minuteman Parkway, Frankfort, KY 40601',
+      email: 'david.davis@ky-em.org',
+      office: '(502) 607-1049',
+      cell: '(859) 230-6934'
+    }
+  ];
 
   const kyemNews = [
     {
@@ -313,6 +337,7 @@
 
 
   let currentPage = 'home';
+  let qrUrls = {};
   let selectedRoleId = orgChart.id;
   let zoom = 65;
 
@@ -600,6 +625,23 @@
     if (storedGooglePushToken) googleWebhookToken = storedGooglePushToken;
 
     hydrateFormFromAssignedContact();
+
+    // Generate vCard QR codes for PIO contacts
+    const buildVcard = (c) =>
+      [`BEGIN:VCARD`, `VERSION:3.0`, `FN:${c.name}`,
+       `ORG:${c.agency}`, `TITLE:${c.title}`,
+       `ADR;TYPE=WORK:;;${c.address};;;`,
+       `EMAIL;TYPE=WORK:${c.email}`,
+       ...(c.office ? [`TEL;TYPE=WORK,VOICE:${c.office}`] : []),
+       ...(c.cell  ? [`TEL;TYPE=CELL,VOICE:${c.cell}`]  : []),
+       `END:VCARD`].join('\n');
+
+    Promise.all(
+      kyemPIOContacts.map(async (c) => {
+        const url = await QRCode.toDataURL(buildVcard(c), { width: 260, margin: 2, color: { dark: '#000', light: '#fff' } });
+        return [c.initials, url];
+      })
+    ).then((pairs) => { qrUrls = Object.fromEntries(pairs); });
 
     return () => window.removeEventListener('hashchange', syncPageFromHash);
   });
@@ -997,16 +1039,68 @@
 {:else if currentPage === 'directory'}
   <main class="layout home-layout">
     <header>
-      <p class="eyebrow">DIRECTORY</p>
-      <h1>KYEM Agency Directory</h1>
-      <p class="intro">Contact directory for KYEM partners and agency personnel.</p>
+      <p class="eyebrow">DIRECTORY &amp; CONTACTS</p>
+      <h1>KYEM Staff Directory</h1>
+      <p class="intro">Official contacts for the Kentucky Division of Emergency Management. Scan a QR code to save contact details directly to your phone. Full directory: <a href="https://www.kyem.ky.gov/inside-kyem/kyem-directory" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/kyem-directory ↗</a></p>
     </header>
-    <div class="embed-shell">
-      <p class="hint">Connect to the master contacts Google Sheet or embed a directory widget here. Update <code>BACKEND_DOCS_SHEET_URL</code> in App.svelte to link a live source.</p>
-      {#if BACKEND_DOCS_SHEET_URL}
-        <a href={BACKEND_DOCS_SHEET_URL} target="_blank" rel="noopener noreferrer" class="doc-link">Open Directory Sheet</a>
-      {/if}
-    </div>
+
+    <section aria-label="Public information contacts">
+      <h2 class="dir-section-label">Public Information Office</h2>
+      <p class="hint">For media inquiries, contact <a href="mailto:david.davis@ky-em.org">David Davis</a> or <a href="mailto:gordon.boyd@ky-em.org">Gordon Boyd</a>.</p>
+
+      <div class="staff-grid">
+        {#each kyemPIOContacts as person}
+          <article class="staff-card">
+            <div class="staff-info">
+              <div class="staff-avatar">{person.initials}</div>
+              <div>
+                <h3 class="staff-name">{person.name}</h3>
+                <p class="staff-title">{person.title}</p>
+                <p class="staff-agency">{person.agency}</p>
+              </div>
+            </div>
+            <address class="staff-contact">
+              <p>{person.address}</p>
+              {#if person.office}<p>Office: <a href="tel:{person.office.replace(/[^+\d]/g,'')}">{person.office}</a></p>{/if}
+              {#if person.cell}<p>Cell: <a href="tel:{person.cell.replace(/[^+\d]/g,'')}">{person.cell}</a></p>{/if}
+              <p>Email: <a href="mailto:{person.email}">{person.email}</a></p>
+            </address>
+            <div class="staff-qr-wrap" aria-label="Contact QR code for {person.name}">
+              {#if qrUrls[person.initials]}
+                <img class="staff-qr" src={qrUrls[person.initials]} alt="vCard QR code — {person.name}" />
+                <div class="staff-qr-avatar">{person.initials}</div>
+              {:else}
+                <div class="staff-qr-loading">Generating QR…</div>
+              {/if}
+              <p class="staff-qr-label">Scan to save contact</p>
+            </div>
+          </article>
+        {/each}
+      </div>
+    </section>
+
+    <section aria-label="Division director" style="margin-top:1.2rem">
+      <h2 class="dir-section-label">Division Leadership</h2>
+      <div class="staff-grid">
+        <article class="staff-card">
+          <div class="staff-info">
+            <div class="staff-avatar" style="background:#0a2d5a">EG</div>
+            <div>
+              <h3 class="staff-name">Eric Gibson</h3>
+              <p class="staff-title">Division Director</p>
+              <p class="staff-agency">KY Division of Emergency Management</p>
+            </div>
+          </div>
+          <address class="staff-contact">
+            <p>100 Minuteman Parkway, Frankfort, KY 40601-6168</p>
+            <p>Office: <a href="tel:5026071630">(502) 607-1630</a></p>
+          </address>
+          <div class="staff-more">
+            <a href="https://www.kyem.ky.gov/inside-kyem/kyem-directory" target="_blank" rel="noopener noreferrer" class="doc-link">Full Directory ↗</a>
+          </div>
+        </article>
+      </div>
+    </section>
   </main>
 
 {:else if currentPage === 'twitter'}
@@ -1135,6 +1229,12 @@
           <p class="kyem-contact-label">FEMA Unmet Needs</p>
           <p>Individual Assistance for disaster survivors</p>
           <p><a href="tel:5026076665">(502) 607-6665</a></p>
+        </div>
+        <div>
+          <p class="kyem-contact-label">Media Inquiries</p>
+          <p>David Davis, Public Information Officer<br>Gordon Boyd, Information Office Supervisor</p>
+          <p><a href="mailto:david.davis@ky-em.org">david.davis@ky-em.org</a><br>
+          <a href="mailto:gordon.boyd@ky-em.org">gordon.boyd@ky-em.org</a></p>
         </div>
       </div>
     </section>
@@ -1281,12 +1381,32 @@
   .kyem-prog-card p { margin: 0; font-size: .87rem; color: #374f6e; flex: 1; line-height: 1.5; }
   .kyem-prog-card a { font-size: .85rem; color: #0f5db0; text-decoration: none; font-weight: 600; margin-top: auto; }
   .kyem-prog-card a:hover { text-decoration: underline; }
-  .kyem-contact-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1rem; }
+  .kyem-contact-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 1rem; }
   .kyem-contact-grid div { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }
   .kyem-contact-label { font-weight: 700; color: #0a2d5a; margin: 0 0 .25rem; font-size: .9rem; }
   .kyem-contact-grid p { margin: 0 0 .2rem; font-size: .87rem; color: #374f6e; }
   .kyem-contact-grid a { color: #0f5db0; text-decoration: none; }
   .kyem-contact-grid a:hover { text-decoration: underline; }
+
+  /* Staff directory */
+  .dir-section-label { margin: 0 0 .4rem; font-size: 1.1rem; color: #0a2d5a; border-bottom: 2px solid #0f5db0; padding-bottom: .3rem; }
+  .staff-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; margin-top: .7rem; }
+  .staff-card { border: 1px solid #d7e0ec; border-radius: 12px; padding: 1rem; background: #fbfdff; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: .7rem 1.2rem; }
+  .staff-info { display: flex; gap: .75rem; align-items: flex-start; grid-column: 1; }
+  .staff-avatar { width: 52px; height: 52px; border-radius: 50%; background: #1c73d3; color: #fff; font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; letter-spacing: .03em; }
+  .staff-name { margin: 0 0 .12rem; font-size: 1rem; color: #0a2d5a; }
+  .staff-title { margin: 0 0 .05rem; font-size: .85rem; color: #374f6e; font-weight: 600; }
+  .staff-agency { margin: 0; font-size: .82rem; color: #5a6f8d; }
+  .staff-contact { font-style: normal; font-size: .85rem; color: #374f6e; display: flex; flex-direction: column; gap: .15rem; grid-column: 1; }
+  .staff-contact p { margin: 0; }
+  .staff-contact a { color: #0f5db0; text-decoration: none; }
+  .staff-contact a:hover { text-decoration: underline; }
+  .staff-qr-wrap { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: center; gap: .35rem; position: relative; }
+  .staff-qr { width: 140px; height: 140px; display: block; border-radius: 6px; }
+  .staff-qr-avatar { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -66%); width: 36px; height: 36px; border-radius: 50%; background: #1c73d3; color: #fff; font-size: .8rem; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); pointer-events: none; }
+  .staff-qr-label { font-size: .72rem; color: #5a6f8d; text-align: center; margin: 0; }
+  .staff-qr-loading { width: 140px; height: 140px; background: #f3f7fc; border: 1px solid #d7e0ec; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .78rem; color: #5a6f8d; }
+  .staff-more { grid-column: 1; }
 
   .org-layout { overflow: hidden; }
   .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
@@ -1333,6 +1453,7 @@
     .kyem-ql-grid { grid-template-columns: repeat(2, 1fr); }
     .kyem-prog-grid { grid-template-columns: 1fr; }
     .kyem-contact-grid { grid-template-columns: repeat(2, 1fr); }
+    .staff-grid { grid-template-columns: 1fr; }
     .role-panel { order: -1; }
     .chart-scale { min-width: 760px; }
   }
