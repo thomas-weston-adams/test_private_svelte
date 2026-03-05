@@ -106,8 +106,14 @@
   let submissionMessage = '';
   let submissionError = '';
 
-
   let showRegistrationModal = false;
+  let showRegistrations = false;
+  let savedRegistrations = [];
+
+  const REGISTRATIONS_KEY = 'eoc-registrations-v1';
+
+  const newsCategories = ['All', ...new Set(kyemNews.map((n) => n.category))];
+  let newsCategory = 'All';
   let intendedCourse = '';
   let classSearch = '';
 
@@ -299,6 +305,8 @@
     link.remove();
     URL.revokeObjectURL(url);
 
+    savedRegistrations = [...savedRegistrations, { ...payload, id: Date.now() }];
+    localStorage.setItem(REGISTRATIONS_KEY, JSON.stringify(savedRegistrations));
     submissionMessage = 'Registration exported as JSON draft (API not connected yet).';
     showRegistrationModal = false;
   }
@@ -308,6 +316,8 @@
     if (!q) return true;
     return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate].join(' ').toLowerCase().includes(q);
   };
+
+  $: filteredNews = newsCategory === 'All' ? kyemNews : kyemNews.filter((n) => n.category === newsCategory);
 
   $: filtered = trainings.filter((training) => {
     const regionMatch = selectedRegion === 'All' || training.region === selectedRegion;
@@ -545,6 +555,21 @@
     };
   }
 
+  function exportRegistrationsCsv() {
+    const cols = ['id','submittedAtEastern','firstName','middleInitial','lastName','agency','title','phone','cell','email','state','county','beingPaid','paidBy','jobCategory','registrantType','selectedClass','accommodations','ageConfirmed','prereqAgreement'];
+    const header = cols.join(',');
+    const rows = savedRegistrations.map((r) =>
+      cols.map((k) => `"${String(r[k] ?? '').replaceAll('"', '""')}"`).join(',')
+    );
+    downloadFile('kyem-registrations.csv', [header, ...rows].join('\n'), 'text/csv;charset=utf-8');
+  }
+
+  function clearSavedRegistrations() {
+    if (!confirm('Delete all saved registrations from this browser? This cannot be undone.')) return;
+    savedRegistrations = [];
+    localStorage.removeItem(REGISTRATIONS_KEY);
+  }
+
   function downloadFile(filename, content, mimeType) {
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -626,6 +651,9 @@
     if (storedGoogleContactsUrl) googleContactsCsvUrl = storedGoogleContactsUrl;
     if (storedGooglePushUrl) googlePushWebhookUrl = storedGooglePushUrl;
     if (storedGooglePushToken) googleWebhookToken = storedGooglePushToken;
+
+    const storedRegistrations = localStorage.getItem(REGISTRATIONS_KEY);
+    if (storedRegistrations) savedRegistrations = JSON.parse(storedRegistrations);
 
     hydrateFormFromAssignedContact();
 
@@ -929,6 +957,56 @@
       </tbody>
     </table>
   </section>
+
+  <section class="reg-submissions" aria-label="Submitted registrations">
+    <div class="reg-submissions-header">
+      <h2 class="news-section-heading" style="margin:0">
+        Submitted Registrations
+        {#if savedRegistrations.length > 0}<span class="reg-count-badge">{savedRegistrations.length}</span>{/if}
+      </h2>
+      <div class="panel-actions">
+        <button type="button" on:click={() => (showRegistrations = !showRegistrations)}>
+          {showRegistrations ? 'Hide' : 'Show'} registrations
+        </button>
+        {#if savedRegistrations.length > 0 && showRegistrations}
+          <button type="button" class="primary" on:click={exportRegistrationsCsv}>Export CSV</button>
+          <button type="button" on:click={clearSavedRegistrations}>Clear all</button>
+        {/if}
+      </div>
+    </div>
+    {#if showRegistrations}
+      {#if savedRegistrations.length === 0}
+        <p class="hint" style="margin-top:.6rem">No registrations submitted yet. Submissions are saved in this browser.</p>
+      {:else}
+        <div class="table-wrap" style="margin-top:.6rem">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Submitted</th>
+                <th scope="col">Name</th>
+                <th scope="col">Email</th>
+                <th scope="col">Agency</th>
+                <th scope="col">Course</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each savedRegistrations as r, i}
+                <tr>
+                  <td>{i + 1}</td>
+                  <td>{r.submittedAtEastern}</td>
+                  <td>{r.firstName} {r.lastName}</td>
+                  <td><a href="mailto:{r.email}">{r.email}</a></td>
+                  <td>{r.agency}</td>
+                  <td>{r.selectedClass || r.selectedClassId}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    {/if}
+  </section>
 </main>
 
 {#if showRegistrationModal}
@@ -1028,12 +1106,17 @@
     <header>
       <p class="eyebrow">NEWS &amp; PUBLIC INFORMATION</p>
       <h1>Kentucky Emergency Management News &amp; Information</h1>
-      <p class="intro">Latest declarations, grants, program updates, and announcements from KYEM. Source: <a href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/news</a></p>
+      <p class="intro">Latest declarations, grants, program updates, and announcements from KYEM. Source: <a href="https://www.kyem.ky.gov/inside-kyem/news" target="_blank" rel="noopener noreferrer">kyem.ky.gov/inside-kyem/news ↗</a></p>
     </header>
 
     <section class="news-pio" aria-label="Public Information Office contacts">
-      <h2 class="news-pio-heading">Media &amp; Public Information Contacts</h2>
-      <p class="hint">For media inquiries or official statements, contact the KYEM Public Information Office or <a href="#media-inquiry" on:click|preventDefault={() => setPage('media-inquiry')}>submit a media inquiry form</a>.</p>
+      <div class="news-pio-header">
+        <div>
+          <h2 class="news-pio-heading">Media &amp; Public Information Contacts</h2>
+          <p class="hint">For media inquiries or official statements, contact the KYEM Public Information Office.</p>
+        </div>
+        <a href="#media-inquiry" class="news-pio-cta" on:click|preventDefault={() => setPage('media-inquiry')}>Submit a Media Inquiry →</a>
+      </div>
       <div class="news-pio-grid">
         {#each kyemPIOContacts as person}
           <article class="news-pio-card">
@@ -1064,9 +1147,23 @@
       </div>
     </section>
 
-    <h2 class="news-section-heading">Recent News &amp; Announcements</h2>
+    <div class="news-controls">
+      <h2 class="news-section-heading" style="margin:0">Recent News &amp; Announcements</h2>
+      <div class="news-filter-chips" role="group" aria-label="Filter by category">
+        {#each newsCategories as cat}
+          <button
+            class="news-chip"
+            class:active={newsCategory === cat}
+            on:click={() => (newsCategory = cat)}
+          >{cat}</button>
+        {/each}
+      </div>
+    </div>
+    <p class="news-count" role="status" aria-live="polite">
+      {filteredNews.length} of {kyemNews.length} articles{newsCategory !== 'All' ? ` · ${newsCategory}` : ''}
+    </p>
     <div class="news-grid">
-      {#each kyemNews as item}
+      {#each filteredNews as item (item.id)}
         <article class="news-card">
           <div class="news-meta">
             <span class="news-date">{item.date}</span>
@@ -1440,6 +1537,20 @@
   .news-summary { margin: 0; color: #374f6e; font-size: .9rem; line-height: 1.5; flex: 1; }
   .news-link { display: inline-block; margin-top: .6rem; padding: .32rem .7rem; font-size: .84rem; color: #0f5db0; text-decoration: none; font-weight: 600; border: 1px solid #0f5db0; border-radius: 999px; background: #f0f7ff; align-self: flex-start; }
   .news-link:hover { background: #0f5db0; color: #fff; }
+  /* News PIO header row */
+  .news-pio-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .3rem; }
+  .news-pio-cta { display: inline-block; padding: .45rem 1rem; background: #1c73d3; color: #fff; border: 1px solid #0f5db0; border-radius: 8px; text-decoration: none; font-size: .88rem; font-weight: 600; white-space: nowrap; align-self: center; }
+  .news-pio-cta:hover { background: #0f5db0; }
+  /* News filter + count */
+  .news-controls { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin: 1.4rem 0 .5rem; border-bottom: 2px solid #0f5db0; padding-bottom: .4rem; }
+  .news-filter-chips { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .news-chip { border: 1px solid #c5d0df; border-radius: 999px; padding: .28rem .7rem; font-size: .8rem; background: #fff; color: #184778; cursor: pointer; }
+  .news-chip.active { background: #1c73d3; color: #fff; border-color: #0f5db0; font-weight: 600; }
+  .news-count { color: #5a6f8d; font-size: .82rem; margin: 0 0 .6rem; }
+  /* Submitted registrations panel */
+  .reg-submissions { margin-top: 1.5rem; }
+  .reg-submissions-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+  .reg-count-badge { display: inline-flex; align-items: center; justify-content: center; background: #1c73d3; color: #fff; border-radius: 999px; font-size: .75rem; font-weight: 700; padding: .1rem .5rem; margin-left: .4rem; vertical-align: middle; }
 
   /* KYEM Site rework */
   .kyem-layout { min-height: 60vh; display: flex; flex-direction: column; gap: 1.5rem; }
