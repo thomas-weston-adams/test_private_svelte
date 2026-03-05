@@ -13,10 +13,6 @@
   let selectedMode = 'All';
   let selectedDate = 'All dates';
 
-  // Set this to your deployed registration API endpoint to persist submissions.
-  // Keep empty to use local JSON download fallback.
-  const REGISTRATION_API_URL = '';
-
   // Backend docs: set these to your master Google Sheet and CSV publish URLs.
   const BACKEND_DOCS_SHEET_URL = '';
   const BACKEND_DOCS_CSV_URL = '';
@@ -275,39 +271,30 @@
       submittedAtEastern: today
     };
 
-    if (REGISTRATION_API_URL) {
-      try {
-        const response = await fetch(REGISTRATION_API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          throw new Error(`Registration API returned ${response.status}`);
-        }
-
-        submissionMessage = 'Registration submitted to connected class database.';
-        showRegistrationModal = false;
-        return;
-      } catch (error) {
-        submissionError = 'Could not submit to the connected database. Downloading draft JSON instead.';
-      }
-    }
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `kyem-registration-${registrationForm.lastName || 'draft'}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-
+    // Always save locally so Backend Docs panel shows it
     savedRegistrations = [...savedRegistrations, { ...payload, id: Date.now() }];
     localStorage.setItem(REGISTRATIONS_KEY, JSON.stringify(savedRegistrations));
-    submissionMessage = 'Registration exported as JSON draft (API not connected yet).';
+
+    // Also POST to Google Sheet webhook if configured
+    if (registrationWebhookUrl) {
+      try {
+        const res = await fetch(registrationWebhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(registrationWebhookToken ? { Authorization: `Bearer ${registrationWebhookToken}` } : {})
+          },
+          body: JSON.stringify({ type: 'registration', ...payload })
+        });
+        if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
+        submissionMessage = 'Registration saved and sent to Google Sheet.';
+      } catch (err) {
+        submissionMessage = 'Registration saved locally. Could not reach Google Sheet webhook.';
+      }
+    } else {
+      submissionMessage = 'Registration saved. Connect a webhook on the Backend Docs page to log to Google Sheets.';
+    }
+
     showRegistrationModal = false;
   }
 
@@ -359,6 +346,10 @@
   let contactForm = { id: '', name: '', agency: '', title: '', email: '', phone: '' };
   let googleContactsCsvUrl = '';
   let googlePushWebhookUrl = '';
+  let registrationWebhookUrl = '';
+  let registrationWebhookToken = '';
+  let registrationWebhookStatus = '';
+  let registrationWebhookError = '';
   let googleSyncMessage = '';
   let googleSyncError = '';
   let googleWebhookToken = '';
@@ -371,6 +362,8 @@
   };
 
   const CONTACTS_KEY = 'eoc-master-contacts-v1';
+  const REGISTRATION_WEBHOOK_KEY = 'eoc-registration-webhook-url-v1';
+  const REGISTRATION_WEBHOOK_TOKEN_KEY = 'eoc-registration-webhook-token-v1';
   const ASSIGNMENTS_KEY = 'eoc-assignments-v1';
   const HISTORY_KEY = 'eoc-assignment-history-v1';
   const GOOGLE_CONTACTS_URL_KEY = 'eoc-google-contacts-csv-url-v1';
@@ -655,6 +648,11 @@
     const storedRegistrations = localStorage.getItem(REGISTRATIONS_KEY);
     if (storedRegistrations) savedRegistrations = JSON.parse(storedRegistrations);
 
+    const storedRegWebhookUrl = localStorage.getItem(REGISTRATION_WEBHOOK_KEY);
+    const storedRegWebhookToken = localStorage.getItem(REGISTRATION_WEBHOOK_TOKEN_KEY);
+    if (storedRegWebhookUrl) registrationWebhookUrl = storedRegWebhookUrl;
+    if (storedRegWebhookToken) registrationWebhookToken = storedRegWebhookToken;
+
     hydrateFormFromAssignedContact();
 
     // Generate vCard QR codes for PIO contacts
@@ -676,6 +674,11 @@
 
     return () => window.removeEventListener('hashchange', syncPageFromHash);
   });
+
+  $: if (currentPage === 'docs') {
+    localStorage.setItem(REGISTRATION_WEBHOOK_KEY, registrationWebhookUrl);
+    localStorage.setItem(REGISTRATION_WEBHOOK_TOKEN_KEY, registrationWebhookToken);
+  }
 
   $: if (currentPage === 'org-chart') {
     localStorage.setItem(CONTACTS_KEY, JSON.stringify(masterContacts));
@@ -967,7 +970,7 @@
     <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
     <p>You clicked: <strong>{intendedCourse}</strong></p>
     <p id="registration-modal-desc" class="warning">Class is intentionally not prefilled. Search and select from the class list below.</p>
-    <p class="destination">Data destination: {REGISTRATION_API_URL ? 'Connected registration database (API)' : 'Local JSON draft download (no live database connected yet)'}</p>
+    <p class="destination">Data destination: {registrationWebhookUrl ? `Google Sheet via webhook + local browser storage` : 'Local browser storage only (configure webhook on Backend Docs page)'}</p>
 
     <form class="reg-grid" on:submit|preventDefault={handleRegistrationSubmit}>
       <label>First Name *<input bind:value={registrationForm.firstName} required /></label>
@@ -1390,13 +1393,27 @@
         <p>Setup guide for the Apps Script push webhook integration.</p>
         <code>docs/google-apps-script-webhook.md</code>
       </article>
-      <article class="home-card">
-        <h2>Registration API</h2>
-        <p>Connect a registration database via the <code>REGISTRATION_API_URL</code> constant in App.svelte.</p>
-      </article>
     </div>
 
-    <section class="reg-submissions" aria-label="Submitted registrations" style="margin-top:2rem">
+    <section class="reg-webhook-config" aria-label="Registration webhook configuration">
+      <h2 class="news-section-heading">Registration → Google Sheet Webhook</h2>
+      <p class="hint">Paste your deployed Google Apps Script URL below. Every training registration will be POSTed there and appended to the <strong>Registrations</strong> tab of your Google Sheet. See <code>docs/google-apps-script-webhook.md</code> for setup.</p>
+      <div class="reg-webhook-fields">
+        <label>Apps Script Webhook URL<input bind:value={registrationWebhookUrl} placeholder="https://script.google.com/macros/s/.../exec" /></label>
+        <label>Bearer Token (optional)<input bind:value={registrationWebhookToken} placeholder="shared secret token" /></label>
+      </div>
+      <p class="hint" style="margin-top:.4rem">
+        {#if registrationWebhookUrl}
+          <span style="color:#1d5f36">● Webhook configured — registrations will be sent to Google Sheets on submit.</span>
+        {:else}
+          <span style="color:#b45309">● No webhook set — registrations are saved in this browser only.</span>
+        {/if}
+      </p>
+      {#if registrationWebhookStatus}<p class="submit-status">{registrationWebhookStatus}</p>{/if}
+      {#if registrationWebhookError}<p class="submit-error">{registrationWebhookError}</p>{/if}
+    </section>
+
+    <section class="reg-submissions" aria-label="Submitted registrations" style="margin-top:1.5rem">
       <div class="reg-submissions-header">
         <h2 class="news-section-heading" style="margin:0">
           Submitted Registrations
@@ -1412,7 +1429,7 @@
           {/if}
         </div>
       </div>
-      <p class="hint" style="margin:.35rem 0 0">Registrations submitted via the Training page are stored in this browser. Use Export CSV to save a copy, or connect <code>REGISTRATION_API_URL</code> to persist to a server.</p>
+      <p class="hint" style="margin:.35rem 0 0">Registrations saved in this browser. Configure the webhook above to also log them to Google Sheets automatically.</p>
       {#if showRegistrations}
         {#if savedRegistrations.length === 0}
           <p class="hint" style="margin-top:.5rem">No registrations submitted yet.</p>
@@ -1550,6 +1567,8 @@
   .news-chip.active { background: #1c73d3; color: #fff; border-color: #0f5db0; font-weight: 600; }
   .news-count { color: #5a6f8d; font-size: .82rem; margin: 0 0 .6rem; }
   /* Submitted registrations panel */
+  .reg-webhook-config { margin-top: 2rem; }
+  .reg-webhook-fields { display: grid; grid-template-columns: 2fr 1fr; gap: .65rem; margin: .75rem 0 .4rem; }
   .reg-submissions { margin-top: 1.5rem; }
   .reg-submissions-header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
   .reg-count-badge { display: inline-flex; align-items: center; justify-content: center; background: #1c73d3; color: #fff; border-radius: 999px; font-size: .75rem; font-weight: 700; padding: .1rem .5rem; margin-left: .4rem; vertical-align: middle; }

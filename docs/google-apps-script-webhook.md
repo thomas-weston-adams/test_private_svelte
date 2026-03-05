@@ -1,45 +1,32 @@
-# Google Apps Script webhook for EOC Org Tool
+# Google Apps Script webhook for KYEM Ops Tool
 
-Use this to receive pushes from the org chart app and write to Google Sheets tabs.
+One script handles two payload types:
+- **Org chart pushes** from the EOC Org Chart tool
+- **Registration submissions** from the Training Calendar
+
+---
 
 ## 1) Create the spreadsheet tabs
+
 Create these tabs in your Google Sheet:
-- `MasterContacts`
-- `Assignments`
-- `AssignmentHistory`
 
-### Expected columns
-`MasterContacts`
-- id
-- name
-- agency
-- title
-- email
-- phone
+**For org chart:**
+- `MasterContacts` — id, name, agency, title, email, phone
+- `Assignments` — roleId, roleName, contactId, contactName, agency, title, email, phone
+- `AssignmentHistory` — timestamp, roleId, roleName, contactId, contactName
 
-`Assignments`
-- roleId
-- roleName
-- contactId
-- contactName
-- agency
-- title
-- email
-- phone
+**For registrations:**
+- `Registrations` — id, submittedAt, firstName, middleInitial, lastName, agency, title, phone, cell, email, state, county, beingPaid, paidBy, jobCategory, registrantType, selectedClass, accommodations, ageConfirmed, prereqAgreement
 
-`AssignmentHistory`
-- timestamp
-- roleId
-- roleName
-- contactId
-- contactName
+---
 
 ## 2) Apps Script code
-In Extensions → Apps Script, paste this into `Code.gs` and set `SPREADSHEET_ID`.
+
+In **Extensions → Apps Script**, paste this into `Code.gs` and set `SPREADSHEET_ID`.
 
 ```javascript
 const SPREADSHEET_ID = 'PASTE_YOUR_SHEET_ID_HERE';
-const SECRET_TOKEN = ''; // optional: set and require bearer token
+const SECRET_TOKEN = ''; // optional: set a bearer token and require it below
 
 function doPost(e) {
   try {
@@ -49,52 +36,80 @@ function doPost(e) {
     }
 
     const payload = JSON.parse(e.postData.contents || '{}');
-    if (!payload || !payload.masterContacts || !payload.assignments) {
-      return jsonResponse({ ok: false, error: 'Invalid payload' }, 400);
+
+    // Route by payload type
+    if (payload.type === 'registration') {
+      appendRegistration(payload);
+      return jsonResponse({ ok: true, type: 'registration', receivedAt: new Date().toISOString() }, 200);
     }
 
+    // Default: org chart push
+    if (!payload.masterContacts || !payload.assignments) {
+      return jsonResponse({ ok: false, error: 'Invalid payload' }, 400);
+    }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     upsertContacts(ss, payload.masterContacts || []);
     writeAssignments(ss, payload.assignments || []);
     writeHistory(ss, payload.assignmentHistory || []);
+    return jsonResponse({ ok: true, type: 'org-chart', receivedAt: new Date().toISOString() }, 200);
 
-    return jsonResponse({ ok: true, receivedAt: new Date().toISOString() }, 200);
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) }, 500);
   }
 }
 
-function upsertContacts(ss, contacts) {
-  const sh = getOrCreateSheet(ss, 'MasterContacts', ['id', 'name', 'agency', 'title', 'email', 'phone']);
-  sh.clearContents();
-  sh.getRange(1, 1, 1, 6).setValues([['id', 'name', 'agency', 'title', 'email', 'phone']]);
-  if (!contacts.length) return;
+// --- Registration handler ---
 
-  const rows = contacts.map(c => [c.id || '', c.name || '', c.agency || '', c.title || '', c.email || '', c.phone || '']);
-  sh.getRange(2, 1, rows.length, 6).setValues(rows);
+function appendRegistration(r) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const cols = ['id','submittedAtEastern','firstName','middleInitial','lastName','agency','title',
+                 'phone','cell','email','state','county','beingPaid','paidBy','jobCategory',
+                 'registrantType','selectedClass','accommodations','ageConfirmed','prereqAgreement'];
+  const sh = getOrCreateSheet(ss, 'Registrations', cols);
+
+  // Write header row if sheet is empty
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(cols);
+  }
+
+  sh.appendRow(cols.map(k => r[k] !== undefined ? String(r[k]) : ''));
+}
+
+// --- Org chart handlers ---
+
+function upsertContacts(ss, contacts) {
+  const cols = ['id', 'name', 'agency', 'title', 'email', 'phone'];
+  const sh = getOrCreateSheet(ss, 'MasterContacts', cols);
+  sh.clearContents();
+  sh.appendRow(cols);
+  if (!contacts.length) return;
+  sh.getRange(2, 1, contacts.length, cols.length)
+    .setValues(contacts.map(c => cols.map(k => c[k] || '')));
 }
 
 function writeAssignments(ss, assignments) {
-  const sh = getOrCreateSheet(ss, 'Assignments', ['roleId', 'roleName', 'contactId', 'contactName', 'agency', 'title', 'email', 'phone']);
+  const cols = ['roleId', 'roleName', 'contactId', 'contactName', 'agency', 'title', 'email', 'phone'];
+  const sh = getOrCreateSheet(ss, 'Assignments', cols);
   sh.clearContents();
-  sh.getRange(1, 1, 1, 8).setValues([['roleId', 'roleName', 'contactId', 'contactName', 'agency', 'title', 'email', 'phone']]);
+  sh.appendRow(cols);
   if (!assignments.length) return;
-
-  const rows = assignments.map(a => [a.roleId || '', a.roleName || '', a.contactId || '', a.contactName || '', a.agency || '', a.title || '', a.email || '', a.phone || '']);
-  sh.getRange(2, 1, rows.length, 8).setValues(rows);
+  sh.getRange(2, 1, assignments.length, cols.length)
+    .setValues(assignments.map(a => cols.map(k => a[k] || '')));
 }
 
 function writeHistory(ss, history) {
-  const sh = getOrCreateSheet(ss, 'AssignmentHistory', ['timestamp', 'roleId', 'roleName', 'contactId', 'contactName']);
+  const cols = ['timestamp', 'roleId', 'roleName', 'contactId', 'contactName'];
+  const sh = getOrCreateSheet(ss, 'AssignmentHistory', cols);
   sh.clearContents();
-  sh.getRange(1, 1, 1, 5).setValues([['timestamp', 'roleId', 'roleName', 'contactId', 'contactName']]);
+  sh.appendRow(cols);
   if (!history.length) return;
-
-  const rows = history.map(h => [h.timestamp || '', h.roleId || '', h.roleName || '', h.contactId || '', h.contactName || '']);
-  sh.getRange(2, 1, rows.length, 5).setValues(rows);
+  sh.getRange(2, 1, history.length, cols.length)
+    .setValues(history.map(h => cols.map(k => h[k] || '')));
 }
 
-function getOrCreateSheet(ss, name) {
+// --- Helpers ---
+
+function getOrCreateSheet(ss, name, cols) {
   return ss.getSheetByName(name) || ss.insertSheet(name);
 }
 
@@ -105,14 +120,30 @@ function jsonResponse(obj, status) {
 }
 ```
 
-## 3) Deploy web app
-- Deploy → New deployment
-- Type: Web app
-- Execute as: Me
-- Who has access: Anyone with link (or restricted as needed)
+---
 
-Copy the deployment URL and paste into **Apps Script Webhook URL** in the org tool.
+## 3) Deploy as web app
 
-## 4) Optional auth
-- Set `SECRET_TOKEN` in Apps Script.
-- Set the same token in the app's **Webhook Bearer Token** field.
+1. Click **Deploy → New deployment**
+2. Type: **Web app**
+3. Execute as: **Me**
+4. Who has access: **Anyone** (required for the app to POST without OAuth)
+5. Copy the deployment URL
+
+---
+
+## 4) Connect to the app
+
+**Registrations webhook:**
+Go to **Backend Docs** in the KYEM Ops Tool → paste the deployment URL into the **Registration → Google Sheet Webhook** field. Every training registration submitted will immediately append a row to the `Registrations` tab.
+
+**Org chart webhook:**
+Go to **Org Chart** → **Google Sheets Contact Sync** → paste the same URL into the **Apps Script Webhook URL** field and click **Push current data to webhook**.
+
+Both use the same script — the `type` field in the payload routes them to the correct sheet.
+
+---
+
+## 5) Optional: bearer token auth
+
+Set `SECRET_TOKEN` in Apps Script to a random string (e.g. `openssl rand -hex 16`). Set the same value in the app's **Bearer Token** field on both the Org Chart and Backend Docs pages.
