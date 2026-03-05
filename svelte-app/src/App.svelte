@@ -958,55 +958,6 @@
     </table>
   </section>
 
-  <section class="reg-submissions" aria-label="Submitted registrations">
-    <div class="reg-submissions-header">
-      <h2 class="news-section-heading" style="margin:0">
-        Submitted Registrations
-        {#if savedRegistrations.length > 0}<span class="reg-count-badge">{savedRegistrations.length}</span>{/if}
-      </h2>
-      <div class="panel-actions">
-        <button type="button" on:click={() => (showRegistrations = !showRegistrations)}>
-          {showRegistrations ? 'Hide' : 'Show'} registrations
-        </button>
-        {#if savedRegistrations.length > 0 && showRegistrations}
-          <button type="button" class="primary" on:click={exportRegistrationsCsv}>Export CSV</button>
-          <button type="button" on:click={clearSavedRegistrations}>Clear all</button>
-        {/if}
-      </div>
-    </div>
-    {#if showRegistrations}
-      {#if savedRegistrations.length === 0}
-        <p class="hint" style="margin-top:.6rem">No registrations submitted yet. Submissions are saved in this browser.</p>
-      {:else}
-        <div class="table-wrap" style="margin-top:.6rem">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Submitted</th>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Agency</th>
-                <th scope="col">Course</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each savedRegistrations as r, i}
-                <tr>
-                  <td>{i + 1}</td>
-                  <td>{r.submittedAtEastern}</td>
-                  <td>{r.firstName} {r.lastName}</td>
-                  <td><a href="mailto:{r.email}">{r.email}</a></td>
-                  <td>{r.agency}</td>
-                  <td>{r.selectedClass || r.selectedClassId}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      {/if}
-    {/if}
-  </section>
 </main>
 
 {#if showRegistrationModal}
@@ -1444,6 +1395,57 @@
         <p>Connect a registration database via the <code>REGISTRATION_API_URL</code> constant in App.svelte.</p>
       </article>
     </div>
+
+    <section class="reg-submissions" aria-label="Submitted registrations" style="margin-top:2rem">
+      <div class="reg-submissions-header">
+        <h2 class="news-section-heading" style="margin:0">
+          Submitted Registrations
+          {#if savedRegistrations.length > 0}<span class="reg-count-badge">{savedRegistrations.length}</span>{/if}
+        </h2>
+        <div class="panel-actions">
+          <button type="button" on:click={() => (showRegistrations = !showRegistrations)}>
+            {showRegistrations ? 'Hide' : 'Show'} registrations
+          </button>
+          {#if savedRegistrations.length > 0 && showRegistrations}
+            <button type="button" class="primary" on:click={exportRegistrationsCsv}>Export CSV</button>
+            <button type="button" on:click={clearSavedRegistrations}>Clear all</button>
+          {/if}
+        </div>
+      </div>
+      <p class="hint" style="margin:.35rem 0 0">Registrations submitted via the Training page are stored in this browser. Use Export CSV to save a copy, or connect <code>REGISTRATION_API_URL</code> to persist to a server.</p>
+      {#if showRegistrations}
+        {#if savedRegistrations.length === 0}
+          <p class="hint" style="margin-top:.5rem">No registrations submitted yet.</p>
+        {:else}
+          <div class="table-wrap" style="margin-top:.6rem">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Submitted</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Email</th>
+                  <th scope="col">Agency</th>
+                  <th scope="col">Course</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each savedRegistrations as r, i}
+                  <tr>
+                    <td>{i + 1}</td>
+                    <td>{r.submittedAtEastern}</td>
+                    <td>{r.firstName} {r.lastName}</td>
+                    <td><a href="mailto:{r.email}">{r.email}</a></td>
+                    <td>{r.agency}</td>
+                    <td>{r.selectedClass || r.selectedClassId}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+      {/if}
+    </section>
   </main>
 
 {/if}
