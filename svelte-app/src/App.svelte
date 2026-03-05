@@ -110,7 +110,6 @@
 
   const newsCategories = ['All', ...new Set(kyemNews.map((n) => n.category))];
   let newsCategory = 'All';
-  let intendedCourse = '';
   let classSearch = '';
 
   const counties = [
@@ -253,9 +252,8 @@
   }
 
   function openRegistration(training) {
-    intendedCourse = `${training.title} (${formatDate(training.startDate)}-${formatDate(training.endDate)})`;
     classSearch = '';
-    registrationForm = { ...emptyForm };
+    registrationForm = { ...emptyForm, selectedClassId: String(training.id) };
     showRegistrationModal = true;
   }
 
@@ -315,6 +313,8 @@
 
   $: searchableClassOptions = trainings.filter((training) => {
     const q = classSearch.trim().toLowerCase();
+    // always keep the pre-selected class visible even when search filters it out
+    if (String(training.id) === registrationForm.selectedClassId) return true;
     return !q || `${training.title} ${training.location} ${training.startDate}`.toLowerCase().includes(q);
   });
 
@@ -943,7 +943,7 @@
               <td data-label="Tuition">{t.tuition}</td>
               <td data-label="Other costs / notes">{t.other}</td>
               <td data-label="Status"><span class="badge">{t.registration}</span></td>
-              <td data-label="Registration"><button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button></td>
+              <td data-label="Registration">{#if t.registration === "Open" || t.registration === "Waitlist"}<button type="button" class="register-btn" class:waitlist={t.registration === "Waitlist"} on:click={() => openRegistration(t)}>{t.registration === "Waitlist" ? "Join Waitlist" : "Register"}</button>{:else}<span class="badge badge-closed">Closed</span>{/if}</td>
               <td data-label="Calendar">
                 <details class="calendar-nested">
                   <summary class="calendar-summary">Add to calendar</summary>
@@ -967,10 +967,9 @@
   <div class="modal-backdrop" role="presentation" on:click={() => (showRegistrationModal = false)}></div>
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="registration-modal-title" aria-describedby="registration-modal-desc">
     <button type="button" class="close-modal" aria-label="Close registration dialog" on:click={() => (showRegistrationModal = false)}>×</button>
-    <h2 id="registration-modal-title">KYEM Registration (Prototype Replacement for Logiforms)</h2>
-    <p>You clicked: <strong>{intendedCourse}</strong></p>
-    <p id="registration-modal-desc" class="warning">Class is intentionally not prefilled. Search and select from the class list below.</p>
-    <p class="destination">Data destination: {registrationWebhookUrl ? `Google Sheet via webhook + local browser storage` : 'Local browser storage only (configure webhook on Backend Docs page)'}</p>
+    <h2 id="registration-modal-title">KYEM Training Registration</h2>
+    <p id="registration-modal-desc">Complete all required fields (*) to register. The selected class is pre-filled — use the search field to change it.</p>
+    <p class="destination">{registrationWebhookUrl ? 'Submissions go to Google Sheet + local storage.' : 'Submissions saved locally only. Configure webhook on Backend Docs page to send to Google Sheets.'}</p>
 
     <form class="reg-grid" on:submit|preventDefault={handleRegistrationSubmit}>
       <label>First Name *<input bind:value={registrationForm.firstName} required /></label>
@@ -1049,7 +1048,7 @@
 
       <div class="modal-actions full">
         <button type="button" on:click={() => (showRegistrationModal = false)}>Cancel</button>
-        <button type="submit" class="primary" disabled={!isFormValid}>Submit registration draft</button>
+        <button type="submit" class="primary" disabled={!isFormValid}>Submit Registration</button>
       </div>
     </form>
   </section>
@@ -1491,6 +1490,8 @@
   .meta { color: #5d6e87; margin-top: .25rem; }
   .badge { background: #e7f1ff; color: #184778; padding: .2rem .5rem; border-radius: 999px; font-weight: 600; }
   .register-btn { border: 1px solid #0f5db0; background: #1c73d3; color: #fff; border-radius: 999px; padding: .35rem .7rem; }
+  .register-btn.waitlist { background: #7c5c00; border-color: #7c5c00; }
+  .badge-closed { background: #d1d5db; color: #6b7280; border-radius: 999px; padding: .2rem .55rem; font-size: .8rem; }
   .calendar-summary { list-style: none; border: 1px solid #8fb0d8; background: #f3f8ff; color: #113b68; border-radius: 999px; padding: .35rem .7rem; font-weight: 600; cursor: pointer; }
   .calendar-summary::-webkit-details-marker { display: none; }
   .calendar-menu { margin-top: .4rem; display: flex; flex-direction: column; gap: .35rem; min-width: 180px; }
