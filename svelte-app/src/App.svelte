@@ -339,6 +339,23 @@
   let qrUrls = {};
   let selectedRoleId = orgChart.id;
   let zoom = 65;
+  let showAssignPanel = false;
+  let orgFullscreen = false;
+  let liveTime = '';
+
+  function updateLiveClock() {
+    liveTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }).format(new Date());
+  }
 
   let masterContacts = [...defaultMasterContacts];
   let assignmentsByRole = { ...defaultAssignments };
@@ -390,6 +407,7 @@
   function handleRoleSelect(event) {
     selectedRoleId = event.detail.roleId;
     hydrateFormFromAssignedContact();
+    showAssignPanel = true;
   }
 
   function hydrateFormFromAssignedContact() {
@@ -655,6 +673,10 @@
 
     hydrateFormFromAssignedContact();
 
+    // Live clock
+    updateLiveClock();
+    const clockInterval = setInterval(updateLiveClock, 1000);
+
     // Generate vCard QR codes for PIO contacts
     const buildVcard = (c) =>
       [`BEGIN:VCARD`, `VERSION:3.0`, `FN:${c.name}`,
@@ -672,7 +694,10 @@
       })
     ).then((pairs) => { qrUrls = Object.fromEntries(pairs); });
 
-    return () => window.removeEventListener('hashchange', syncPageFromHash);
+    return () => {
+      window.removeEventListener('hashchange', syncPageFromHash);
+      clearInterval(clockInterval);
+    };
   });
 
   $: if (currentPage === 'docs') {
@@ -761,52 +786,56 @@
     </section>
   </main>
 {:else if currentPage === 'org-chart'}
-  <main class="layout org-layout">
-    <header>
-      <p class="eyebrow">EOC TOOLING PROTOTYPE</p>
-      <h1>Kentucky Emergency Management Org Chart</h1>
-      <p class="intro">Clickable, updateable role chart with assignment history, master contact sync, and print-ready output for reports/IAPs.</p>
+  <div class="eoc-shell" class:eoc-fullscreen={orgFullscreen}>
+
+    <!-- ── EOC Command Bar ──────────────────────────────────── -->
+    <header class="eoc-command-bar no-print">
+      <div class="eoc-cb-left">
+        <span class="eoc-cb-label">SEOC</span>
+        <span class="eoc-cb-incident">{ics203Form.incidentName || 'Kentucky Emergency Operations Center'}</span>
+        {#if ics203Form.operationalPeriod}
+          <span class="eoc-cb-period">OP: {ics203Form.operationalPeriod}</span>
+        {/if}
+      </div>
+      <div class="eoc-cb-center">
+        <div class="eoc-staffing-meter">
+          <span class="eoc-staffing-count">
+            <strong>{populatedRoles}</strong><span class="eoc-staffing-sep">/</span>{roleList.length}
+          </span>
+          <span class="eoc-staffing-label">POSITIONS STAFFED</span>
+          <div class="eoc-meter-bar">
+            <div class="eoc-meter-fill" style="width: {Math.round((populatedRoles / roleList.length) * 100)}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="eoc-cb-right">
+        <span class="eoc-clock">{liveTime}</span>
+        <span class="eoc-tz">ET</span>
+      </div>
     </header>
 
-    <section class="org-toolbar no-print" aria-label="Org chart controls">
-      <p><strong>{populatedRoles}</strong> / {roleList.length} roles currently staffed</p>
-      <label>Zoom ({zoom}%) <input type="range" min="60" max="130" step="5" bind:value={zoom} /></label>
-      <button type="button" on:click={printOrgChart}>Print / Save PDF</button>
-    </section>
-
-    <section class="google-sync no-print" aria-label="Google Sheets sync">
-      <h2>Google Sheets Contact Sync</h2>
-      <p class="hint">Publish your contacts sheet as CSV (name,agency,title,email,phone), then paste the URL below.</p>
-      <label>Google Sheet CSV URL<input bind:value={googleContactsCsvUrl} placeholder="https://docs.google.com/.../pub?output=csv" /></label>
-      <label>Apps Script Webhook URL (optional)<input bind:value={googlePushWebhookUrl} placeholder="https://script.google.com/macros/s/.../exec" /></label>
-      <label>Webhook Bearer Token (optional)<input bind:value={googleWebhookToken} placeholder="shared secret token" /></label>
-      <div class="panel-actions">
-        <button type="button" on:click={importContactsFromGoogleSheet}>Import from Google Sheet</button>
-        <button type="button" on:click={pushContactsToGoogleSheet}>Push current data to webhook</button>
+    <!-- ── Secondary toolbar ───────────────────────────────── -->
+    <div class="eoc-toolbar no-print">
+      <div class="eoc-toolbar-left">
+        <label class="eoc-zoom-label">
+          <span>ZOOM {zoom}%</span>
+          <input type="range" min="45" max="130" step="5" bind:value={zoom} class="eoc-zoom-slider" />
+        </label>
       </div>
-      <p class="hint">Webhook payload includes: incident metadata, master contacts, assignments snapshot, and assignment history.</p>
-      <p class="hint">Apps Script setup guide: <code>docs/google-apps-script-webhook.md</code></p>
-      {#if googleSyncMessage}<p class="submit-status">{googleSyncMessage}</p>{/if}
-      {#if googleSyncError}<p class="submit-error">{googleSyncError}</p>{/if}
-    </section>
-
-    <section class="ics-tools no-print" aria-label="ICS forms exports">
-      <h2>ICS 203 / 207 Compatibility</h2>
-      <div class="ics-grid">
-        <label>Incident Name<input bind:value={ics203Form.incidentName} /></label>
-        <label>Operational Period<input bind:value={ics203Form.operationalPeriod} placeholder="e.g. 2026-03-02 0800 to 2000" /></label>
-        <label>Prepared By<input bind:value={ics203Form.preparedBy} /></label>
-        <label>Approved By<input bind:value={ics203Form.approvedBy} /></label>
+      <div class="eoc-toolbar-right">
+        <button type="button" class="eoc-btn eoc-btn-ghost" on:click={() => (showAssignPanel = !showAssignPanel)}>
+          {showAssignPanel ? 'Hide Panel' : 'Assign Role'}
+        </button>
+        <button type="button" class="eoc-btn eoc-btn-ghost" on:click={() => (orgFullscreen = !orgFullscreen)}>
+          {orgFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+        </button>
+        <button type="button" class="eoc-btn eoc-btn-ghost" on:click={printOrgChart}>Print / PDF</button>
       </div>
-      <div class="panel-actions">
-        <button type="button" on:click={downloadIcs203Json}>Download ICS 203 JSON</button>
-        <button type="button" on:click={downloadIcs207Csv}>Download ICS 207 CSV</button>
-      </div>
-    </section>
+    </div>
 
-    <div class="org-two-col">
-      <section class="chart-wrap" aria-label="Organizational chart">
-        <p class="chart-tip no-print">Tip: rotate your phone to landscape for a wider chart view.</p>
+    <!-- ── Main chart area ─────────────────────────────────── -->
+    <div class="eoc-main">
+      <section class="eoc-chart-wrap" aria-label="Organizational chart">
         <div class="chart-scale" style={`--chart-zoom: ${zoom / 100}`}>
           <ul class="tree">
             <OrgNode
@@ -820,80 +849,166 @@
         </div>
       </section>
 
-      <aside class="role-panel no-print" aria-live="polite">
-        <h2>Role Assignment</h2>
-        <p><strong>Role:</strong> {selectedRole.name}</p>
-        {#if selectedAssignedContact}
-          <p class="assignment-state">Assigned to: <strong>{selectedAssignedContact.name}</strong></p>
-        {:else}
-          <p class="assignment-state vacant">Currently vacant</p>
-        {/if}
-
-        <form class="assign-form" on:submit|preventDefault={saveRoleAssignment}>
-          <label>Name *<input bind:value={contactForm.name} required /></label>
-          <label>Agency<input bind:value={contactForm.agency} /></label>
-          <label>Role/Title<input bind:value={contactForm.title} /></label>
-          <label>Email *<input type="email" bind:value={contactForm.email} required /></label>
-          <label>Phone<input bind:value={contactForm.phone} /></label>
-          <p class="hint">If email matches a master contact, this role uses that existing contact. Otherwise a new master contact is created.</p>
-          <div class="panel-actions">
-            <button type="submit" class="primary">Save assignment</button>
-            <button type="button" on:click={clearAssignment}>Mark vacant</button>
+      <!-- ── Slide-out assignment panel ───────────────────── -->
+      {#if showAssignPanel}
+        <aside class="eoc-assign-panel no-print" aria-live="polite">
+          <div class="eoc-panel-header">
+            <h2 class="eoc-panel-title">Role Assignment</h2>
+            <button type="button" class="eoc-panel-close" on:click={() => (showAssignPanel = false)} aria-label="Close panel">✕</button>
           </div>
-        </form>
-      </aside>
+
+          <div class="eoc-role-info">
+            <p class="eoc-role-name">{selectedRole.name}</p>
+            {#if selectedAssignedContact}
+              <p class="eoc-role-status staffed-status">
+                <span class="eoc-status-dot staffed-dot"></span>
+                {selectedAssignedContact.name}
+              </p>
+            {:else}
+              <p class="eoc-role-status vacant-status">
+                <span class="eoc-status-dot vacant-dot"></span>
+                VACANT
+              </p>
+            {/if}
+          </div>
+
+          <form class="eoc-assign-form" on:submit|preventDefault={saveRoleAssignment}>
+            <label class="eoc-field-label">
+              Name *
+              <input class="eoc-input" bind:value={contactForm.name} required placeholder="Full name" />
+            </label>
+            <label class="eoc-field-label">
+              Agency
+              <input class="eoc-input" bind:value={contactForm.agency} placeholder="Agency or organization" />
+            </label>
+            <label class="eoc-field-label">
+              Role / Title
+              <input class="eoc-input" bind:value={contactForm.title} />
+            </label>
+            <label class="eoc-field-label">
+              Email *
+              <input class="eoc-input" type="email" bind:value={contactForm.email} required placeholder="email@agency.gov" />
+            </label>
+            <label class="eoc-field-label">
+              Phone
+              <input class="eoc-input" bind:value={contactForm.phone} placeholder="(502) 555-0100" />
+            </label>
+            <p class="eoc-panel-hint">Email match updates an existing contact. New email creates a new master contact.</p>
+            <div class="eoc-form-actions">
+              <button type="submit" class="eoc-btn eoc-btn-primary">Save Assignment</button>
+              <button type="button" class="eoc-btn eoc-btn-danger" on:click={clearAssignment}>Mark Vacant</button>
+            </div>
+          </form>
+        </aside>
+      {/if}
     </div>
 
-    <section class="assignment-report" aria-label="Current role assignments">
-      <h2>Current Staffing Report (IAP-ready)</h2>
-      <table>
-        <thead><tr><th>Role</th><th>Assigned Person</th><th>Agency</th><th>Email</th><th>Phone</th></tr></thead>
-        <tbody>
-          {#each roleList as role}
-            {@const contact = contactsById[assignmentsByRole[role.id]]}
-            <tr>
-              <td>{role.name}</td>
-              <td>{contact?.name || 'Vacant'}</td>
-              <td>{contact?.agency || ''}</td>
-              <td>{contact?.email || ''}</td>
-              <td>{contact?.phone || ''}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </section>
+    <!-- ── Collapsible config panels ──────────────────────── -->
+    <div class="eoc-config-panels no-print">
+      <details class="eoc-details">
+        <summary class="eoc-details-summary">Incident Info &amp; ICS Export</summary>
+        <div class="eoc-details-body">
+          <div class="ics-grid">
+            <label class="eoc-field-label">Incident Name<input class="eoc-input" bind:value={ics203Form.incidentName} /></label>
+            <label class="eoc-field-label">Operational Period<input class="eoc-input" bind:value={ics203Form.operationalPeriod} placeholder="e.g. 2026-03-02 0800–2000" /></label>
+            <label class="eoc-field-label">Prepared By<input class="eoc-input" bind:value={ics203Form.preparedBy} /></label>
+            <label class="eoc-field-label">Approved By<input class="eoc-input" bind:value={ics203Form.approvedBy} /></label>
+          </div>
+          <div class="eoc-form-actions" style="margin-top:.6rem">
+            <button type="button" class="eoc-btn eoc-btn-ghost" on:click={downloadIcs203Json}>Download ICS 203 JSON</button>
+            <button type="button" class="eoc-btn eoc-btn-ghost" on:click={downloadIcs207Csv}>Download ICS 207 CSV</button>
+          </div>
+        </div>
+      </details>
 
-    <section class="master-contacts no-print" aria-label="Master contact sheet">
-      <h2>Master Contact Sheet</h2>
-      <p>This list is the source of truth used by all role assignments.</p>
-      <table>
-        <thead><tr><th>Name</th><th>Agency</th><th>Title</th><th>Email</th><th>Phone</th></tr></thead>
-        <tbody>
-          {#each masterContacts as contact}
-            <tr>
-              <td>{contact.name}</td><td>{contact.agency}</td><td>{contact.title}</td><td>{contact.email}</td><td>{contact.phone}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </section>
+      <details class="eoc-details">
+        <summary class="eoc-details-summary">Google Sheets Sync</summary>
+        <div class="eoc-details-body">
+          <label class="eoc-field-label">Google Sheet CSV URL<input class="eoc-input" bind:value={googleContactsCsvUrl} placeholder="https://docs.google.com/.../pub?output=csv" /></label>
+          <label class="eoc-field-label" style="margin-top:.5rem">Apps Script Webhook URL (optional)<input class="eoc-input" bind:value={googlePushWebhookUrl} placeholder="https://script.google.com/macros/s/.../exec" /></label>
+          <label class="eoc-field-label" style="margin-top:.5rem">Webhook Bearer Token (optional)<input class="eoc-input" bind:value={googleWebhookToken} placeholder="shared secret token" /></label>
+          <div class="eoc-form-actions" style="margin-top:.6rem">
+            <button type="button" class="eoc-btn eoc-btn-ghost" on:click={importContactsFromGoogleSheet}>Import from Sheet</button>
+            <button type="button" class="eoc-btn eoc-btn-ghost" on:click={pushContactsToGoogleSheet}>Push to Webhook</button>
+          </div>
+          {#if googleSyncMessage}<p class="submit-status" style="margin-top:.4rem">{googleSyncMessage}</p>{/if}
+          {#if googleSyncError}<p class="submit-error" style="margin-top:.4rem">{googleSyncError}</p>{/if}
+        </div>
+      </details>
+    </div>
 
-    <section class="assignment-history" aria-label="Assignment change history">
-      <h2>Assignment Activity Log</h2>
-      <table>
-        <thead><tr><th>Time (UTC)</th><th>Role</th><th>Assigned to</th></tr></thead>
-        <tbody>
-          {#if assignmentHistory.length === 0}
-            <tr><td colspan="3">No assignment updates yet.</td></tr>
-          {:else}
-            {#each assignmentHistory.slice(0, 20) as row}
-              <tr><td>{row.timestamp}</td><td>{row.roleName}</td><td>{row.contactName}</td></tr>
+    <!-- ── Staffing report table ───────────────────────────── -->
+    <section class="eoc-report-section" aria-label="Current role assignments">
+      <h2 class="eoc-report-heading">Current Staffing Report — IAP Ready</h2>
+      <div class="eoc-table-wrap">
+        <table class="eoc-table">
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Level</th>
+              <th>Assigned Person</th>
+              <th>Agency</th>
+              <th>Email</th>
+              <th>Phone</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each roleList as role}
+              {@const contact = contactsById[assignmentsByRole[role.id]]}
+              <tr class={contact ? 'row-staffed' : 'row-vacant'}>
+                <td>{role.name}</td>
+                <td><span class="level-chip level-chip-{role.level}">{role.level}</span></td>
+                <td>{contact?.name || '—'}</td>
+                <td>{contact?.agency || ''}</td>
+                <td>{contact?.email || ''}</td>
+                <td>{contact?.phone || ''}</td>
+              </tr>
             {/each}
-          {/if}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </section>
-  </main>
+
+    <!-- ── Master contacts + history ──────────────────────── -->
+    <div class="eoc-bottom-panels no-print">
+      <details class="eoc-details">
+        <summary class="eoc-details-summary">Master Contact Sheet ({masterContacts.length})</summary>
+        <div class="eoc-details-body">
+          <div class="eoc-table-wrap">
+            <table class="eoc-table">
+              <thead><tr><th>Name</th><th>Agency</th><th>Title</th><th>Email</th><th>Phone</th></tr></thead>
+              <tbody>
+                {#each masterContacts as contact}
+                  <tr><td>{contact.name}</td><td>{contact.agency}</td><td>{contact.title}</td><td>{contact.email}</td><td>{contact.phone}</td></tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="eoc-details">
+        <summary class="eoc-details-summary">Assignment Activity Log ({assignmentHistory.length})</summary>
+        <div class="eoc-details-body">
+          <div class="eoc-table-wrap">
+            <table class="eoc-table">
+              <thead><tr><th>Time (UTC)</th><th>Role</th><th>Assigned To</th></tr></thead>
+              <tbody>
+                {#if assignmentHistory.length === 0}
+                  <tr><td colspan="3" style="color:#6b8099">No assignment updates yet.</td></tr>
+                {:else}
+                  {#each assignmentHistory.slice(0, 30) as row}
+                    <tr><td>{row.timestamp}</td><td>{row.roleName}</td><td>{row.contactName}</td></tr>
+                  {/each}
+                {/if}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </div>
+
+  </div>
 {:else if currentPage === 'training'}
   <a class="skip-link" href="#results">Skip to training results</a>
 
@@ -1639,28 +1754,464 @@
   .staff-qr-loading { width: 140px; height: 140px; background: #f3f7fc; border: 1px solid #d7e0ec; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: .78rem; color: #5a6f8d; }
   .staff-more { grid-column: 1; }
 
-  .org-layout { overflow: hidden; }
-  .org-toolbar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .75rem; }
-  .org-toolbar p { margin: 0; }
-  .google-sync, .ics-tools { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; margin-bottom: .8rem; background: #fbfdff; }
-  .google-sync h2, .ics-tools h2 { margin: 0 0 .35rem; font-size: 1rem; }
-  .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
-  .chart-tip { margin: 0 0 .4rem; color: #425b80; font-size: .86rem; }
-  .org-two-col { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: .8rem; align-items: start; }
-  .chart-wrap { overflow: auto; padding: .5rem; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; max-height: 70vh; }
-  .chart-scale { transform: scale(var(--chart-zoom)); transform-origin: top left; width: calc(100% / var(--chart-zoom)); min-width: 980px; }
+  /* ═══════════════════════════════════════════════════════════
+     EOC Org Chart Shell
+  ═══════════════════════════════════════════════════════════ */
+  .eoc-shell {
+    max-width: 1600px;
+    margin: 0 auto;
+    background: #07111c;
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0,0,0,.55), 0 0 0 1px rgba(0,210,255,.08);
+    overflow: hidden;
+    color: #c8ddf0;
+    font-family: inherit;
+  }
+  .eoc-fullscreen {
+    position: fixed;
+    inset: 0;
+    max-width: none;
+    border-radius: 0;
+    z-index: 9000;
+    overflow: auto;
+  }
+
+  /* ── Command bar ──────────────────────────────────────── */
+  .eoc-command-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    background: #040d16;
+    border-bottom: 1px solid rgba(0,210,255,.12);
+    padding: .65rem 1.2rem;
+    gap: 1rem;
+  }
+  .eoc-cb-left {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+  .eoc-cb-label {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .15em;
+    color: #00d2ff;
+    background: rgba(0,210,255,.12);
+    border: 1px solid rgba(0,210,255,.25);
+    border-radius: 4px;
+    padding: .1rem .45rem;
+  }
+  .eoc-cb-incident {
+    font-size: .95rem;
+    font-weight: 700;
+    color: #e8f4ff;
+    letter-spacing: .02em;
+  }
+  .eoc-cb-period {
+    font-size: .75rem;
+    color: #7a9cbf;
+    font-style: italic;
+  }
+  .eoc-cb-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .2rem;
+    min-width: 180px;
+  }
+  .eoc-staffing-count {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #e8f4ff;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .eoc-staffing-count strong { color: #00e89a; }
+  .eoc-staffing-sep { color: #3a5a78; margin: 0 .1rem; }
+  .eoc-staffing-label {
+    font-size: .55rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: #4a7a9b;
+    text-transform: uppercase;
+  }
+  .eoc-meter-bar {
+    width: 140px;
+    height: 5px;
+    background: rgba(255,255,255,.07);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: .2rem;
+  }
+  .eoc-meter-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00b87a, #00e89a);
+    border-radius: 3px;
+    transition: width .5s ease;
+  }
+  .eoc-cb-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .05rem;
+  }
+  .eoc-clock {
+    font-size: .9rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #a8cce8;
+    letter-spacing: .03em;
+  }
+  .eoc-tz {
+    font-size: .6rem;
+    color: #4a7a9b;
+    letter-spacing: .1em;
+  }
+
+  /* ── Secondary toolbar ────────────────────────────────── */
+  .eoc-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .5rem 1rem;
+    background: #060f18;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    gap: .75rem;
+    flex-wrap: wrap;
+  }
+  .eoc-toolbar-left, .eoc-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+  }
+  .eoc-zoom-label {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    color: #5a8ab0;
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+  }
+  .eoc-zoom-slider {
+    width: 110px;
+    accent-color: #00d2ff;
+    cursor: pointer;
+  }
+
+  /* ── EOC buttons ──────────────────────────────────────── */
+  .eoc-btn {
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 600;
+    border-radius: 5px;
+    padding: .38rem .75rem;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+    letter-spacing: .02em;
+  }
+  .eoc-btn-ghost {
+    background: rgba(0,210,255,.06);
+    border: 1px solid rgba(0,210,255,.2);
+    color: #7ac8e8;
+  }
+  .eoc-btn-ghost:hover {
+    background: rgba(0,210,255,.14);
+    border-color: rgba(0,210,255,.45);
+    color: #c0e8f8;
+  }
+  .eoc-btn-primary {
+    background: #0a4e7a;
+    border: 1px solid #0d77b8;
+    color: #c8eeff;
+  }
+  .eoc-btn-primary:hover {
+    background: #0d6496;
+    color: #fff;
+  }
+  .eoc-btn-danger {
+    background: rgba(200,40,40,.12);
+    border: 1px solid rgba(200,40,40,.3);
+    color: #f08080;
+  }
+  .eoc-btn-danger:hover {
+    background: rgba(200,40,40,.22);
+    border-color: rgba(200,40,40,.55);
+    color: #ffaaaa;
+  }
+
+  /* ── Main chart + panel layout ────────────────────────── */
+  .eoc-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    min-height: 60vh;
+  }
+  .eoc-chart-wrap {
+    flex: 1 1 0;
+    overflow: auto;
+    padding: 1.5rem 1rem 1rem;
+    max-height: 75vh;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 39px,
+      rgba(0,210,255,.025) 40px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 39px,
+      rgba(0,210,255,.025) 40px
+    );
+  }
+  .eoc-fullscreen .eoc-chart-wrap {
+    max-height: calc(100vh - 160px);
+  }
+  .chart-scale {
+    transform: scale(var(--chart-zoom));
+    transform-origin: top left;
+    width: calc(100% / var(--chart-zoom));
+    min-width: 980px;
+  }
   .tree { margin: 0 auto; padding: 0; display: table; }
   :global(.tree ul) { margin: 0; padding: 0; display: table; }
-  .role-panel { border: 1px solid #d7e0ec; border-radius: 10px; padding: .75rem; background: #fbfdff; }
-  .role-panel h2 { margin-top: 0; }
-  .assign-form { display: grid; gap: .45rem; }
+
+  /* ── Assignment slide panel ───────────────────────────── */
+  .eoc-assign-panel {
+    width: 310px;
+    flex-shrink: 0;
+    background: #060f18;
+    border-left: 1px solid rgba(0,210,255,.12);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+  }
+  .eoc-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .7rem 1rem;
+    background: #040d16;
+    border-bottom: 1px solid rgba(0,210,255,.1);
+  }
+  .eoc-panel-title {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: #7ac8e8;
+    text-transform: uppercase;
+  }
+  .eoc-panel-close {
+    background: transparent;
+    border: none;
+    color: #4a7a9b;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: .2rem .4rem;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .eoc-panel-close:hover { color: #c8ddf0; background: rgba(255,255,255,.07); }
+  .eoc-role-info {
+    padding: .8rem 1rem;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .eoc-role-name {
+    margin: 0 0 .35rem;
+    font-size: .92rem;
+    font-weight: 700;
+    color: #ddeeff;
+    line-height: 1.35;
+  }
+  .eoc-role-status {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .8rem;
+    font-weight: 600;
+  }
+  .staffed-status { color: #00e89a; }
+  .vacant-status  { color: #ff6b6b; }
+  .eoc-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .staffed-dot { background: #00e89a; box-shadow: 0 0 5px rgba(0,232,154,.7); }
+  .vacant-dot  { background: #ff4444; box-shadow: 0 0 5px rgba(255,68,68,.7); }
+  .eoc-assign-form {
+    display: grid;
+    gap: .5rem;
+    padding: .8rem 1rem;
+    flex: 1;
+    overflow-y: auto;
+  }
+  .eoc-field-label {
+    display: grid;
+    gap: .28rem;
+    font-size: .73rem;
+    font-weight: 600;
+    color: #5a8ab0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .eoc-input {
+    padding: .5rem .65rem;
+    background: #0a1826;
+    border: 1px solid rgba(0,210,255,.18);
+    border-radius: 5px;
+    color: #c8ddf0;
+    font: inherit;
+    font-size: .84rem;
+  }
+  .eoc-input:focus {
+    outline: none;
+    border-color: rgba(0,210,255,.55);
+    box-shadow: 0 0 0 2px rgba(0,210,255,.12);
+  }
+  .eoc-input::placeholder { color: #2d4f68; }
+  .eoc-panel-hint {
+    font-size: .71rem;
+    color: #3a5a78;
+    margin: 0;
+    line-height: 1.45;
+  }
+  .eoc-form-actions {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── Config panels (collapsible) ──────────────────────── */
+  .eoc-config-panels {
+    display: flex;
+    gap: .5rem;
+    padding: .6rem 1rem;
+    background: #060f18;
+    border-top: 1px solid rgba(255,255,255,.05);
+    flex-wrap: wrap;
+  }
+  .eoc-details {
+    flex: 1;
+    min-width: 280px;
+    background: #040d16;
+    border: 1px solid rgba(0,210,255,.1);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .eoc-details-summary {
+    padding: .55rem .85rem;
+    cursor: pointer;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #5a8ab0;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    user-select: none;
+    list-style: none;
+  }
+  .eoc-details-summary::-webkit-details-marker { display: none; }
+  .eoc-details-summary::before {
+    content: '▶ ';
+    font-size: .65rem;
+    opacity: .6;
+  }
+  .eoc-details[open] .eoc-details-summary::before { content: '▼ '; }
+  .eoc-details-summary:hover { color: #a8cce8; }
+  .eoc-details-body {
+    padding: .7rem .85rem;
+    border-top: 1px solid rgba(0,210,255,.08);
+  }
+  .ics-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: .5rem; }
+
+  /* ── Staffing report table ────────────────────────────── */
+  .eoc-report-section {
+    padding: 1rem 1rem 1.2rem;
+    background: #07111c;
+    border-top: 1px solid rgba(0,210,255,.1);
+  }
+  .eoc-report-heading {
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: #4a7a9b;
+    margin: 0 0 .65rem;
+    padding-bottom: .35rem;
+    border-bottom: 1px solid rgba(0,210,255,.1);
+  }
+  .eoc-table-wrap {
+    overflow: auto;
+    border: 1px solid rgba(0,210,255,.1);
+    border-radius: 6px;
+  }
+  .eoc-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 800px;
+    font-size: .82rem;
+  }
+  .eoc-table thead tr {
+    background: #040d16;
+    border-bottom: 1px solid rgba(0,210,255,.12);
+  }
+  .eoc-table th {
+    padding: .5rem .75rem;
+    text-align: left;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #4a7a9b;
+  }
+  .eoc-table td {
+    padding: .45rem .75rem;
+    border-bottom: 1px solid rgba(255,255,255,.04);
+    color: #a8c8e8;
+    vertical-align: middle;
+  }
+  .row-staffed td:first-child { color: #ddeeff; }
+  .row-vacant { opacity: .55; }
+  .row-vacant td:first-child { color: #7a9cbf; font-style: italic; }
+  .eoc-table tbody tr:hover { background: rgba(0,210,255,.04); }
+
+  .level-chip {
+    display: inline-block;
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: .1rem .45rem;
+    border-radius: 3px;
+  }
+  .level-chip-command { background: rgba(245,196,0,.15); color: #f5c400; }
+  .level-chip-section { background: rgba(0,184,122,.15); color: #00e89a; }
+  .level-chip-branch  { background: rgba(33,150,243,.15); color: #64b5f6; }
+  .level-chip-unit    { background: rgba(230,114,26,.15); color: #ffb04d; }
+
+  /* ── Bottom collapsible panels ────────────────────────── */
+  .eoc-bottom-panels {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: .6rem 1rem 1rem;
+    background: #07111c;
+    border-top: 1px solid rgba(255,255,255,.04);
+  }
+  .eoc-bottom-panels .eoc-details { min-width: 0; }
+
+  /* ── Responsive ───────────────────────────────────────── */
   .hint { color: #5a6f8d; font-size: .82rem; margin: .25rem 0; }
   .panel-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
   .assignment-state { color: #1d5f36; }
   .assignment-state.vacant { color: #b45309; }
-  .assignment-report, .master-contacts, .assignment-history { margin-top: 1rem; }
-  .assignment-report table, .master-contacts table, .assignment-history table { width: 100%; min-width: 800px; border-collapse: collapse; }
-  .assignment-report th, .assignment-report td, .master-contacts th, .master-contacts td, .assignment-history th, .assignment-history td { border-bottom: 1px solid #e6edf6; padding: .45rem; text-align: left; font-size: .95rem; }
 
   button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #0f5db0; outline-offset: 2px; }
 
@@ -1674,7 +2225,6 @@
     td { border: 0; padding: .45rem .35rem; }
     td::before { content: attr(data-label); display: block; color: #5a6f8d; font-size: .8rem; margin-bottom: .12rem; }
     .reg-grid { grid-template-columns: 1fr; }
-    .org-two-col { grid-template-columns: 1fr; }
     .home-grid { grid-template-columns: 1fr; }
     .docs-grid { grid-template-columns: 1fr; }
     .ics-grid { grid-template-columns: 1fr; }
@@ -1687,7 +2237,12 @@
     .kyem-prog-grid { grid-template-columns: 1fr; }
     .kyem-contact-grid { grid-template-columns: repeat(2, 1fr); }
     .staff-grid { grid-template-columns: 1fr; }
-    .role-panel { order: -1; }
+    /* EOC shell mobile */
+    .eoc-command-bar { grid-template-columns: 1fr; gap: .5rem; }
+    .eoc-cb-right { align-items: flex-start; }
+    .eoc-main { flex-direction: column; }
+    .eoc-assign-panel { width: 100%; border-left: none; border-top: 1px solid rgba(0,210,255,.12); }
+    .eoc-config-panels { flex-direction: column; }
     .chart-scale { min-width: 760px; }
   }
 
@@ -1703,7 +2258,22 @@
     .no-print, .page-nav { display: none !important; }
     :global(body) { background: white; }
     .layout { box-shadow: none; border: 0; padding: 0; max-width: none; }
-    .chart-wrap { max-height: none; overflow: visible; border: 0; }
-    .chart-scale { transform: scale(.78); transform-origin: top left; width: 128%; }
+    /* EOC shell print styles */
+    .eoc-shell {
+      background: white;
+      color: #000;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    .eoc-command-bar { background: #f0f0f0; color: #000; border-bottom: 2px solid #333; }
+    .eoc-cb-label, .eoc-cb-incident, .eoc-clock { color: #000 !important; }
+    .eoc-main { min-height: unset; }
+    .eoc-chart-wrap { max-height: none; overflow: visible; background: none; }
+    .chart-scale { transform: scale(.72); transform-origin: top left; width: 139%; }
+    .eoc-assign-panel, .eoc-toolbar, .eoc-config-panels, .eoc-bottom-panels { display: none !important; }
+    .eoc-report-section { border-top: 2px solid #333; }
+    .eoc-table { color: #000; }
+    .eoc-table th { color: #333; }
+    .eoc-table td { color: #000; border-bottom-color: #ccc; }
   }
 </style>
