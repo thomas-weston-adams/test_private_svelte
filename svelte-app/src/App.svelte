@@ -301,8 +301,10 @@
   const inQuery = (training) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
-    return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate].join(' ').toLowerCase().includes(q);
+    return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate, training.region, training.mode].join(' ').toLowerCase().includes(q);
   };
+
+  $: hasActiveFilters = query || selectedRegion !== 'All' || selectedMode !== 'All' || selectedDate !== 'All dates';
 
   $: filteredNews = newsCategory === 'All' ? kyemNews : kyemNews.filter((n) => n.category === newsCategory);
 
@@ -1014,27 +1016,48 @@
 
   <main class="layout">
   <header>
-    <p class="eyebrow">UNOFFICIAL PROTOTYPE</p>
-    <h1>Kentucky Emergency Management Training Calendar</h1>
-    <p class="intro">Integrated training and registration prototype with ADA-focused form structure.</p>
-    <p class="intro-note">This prototype replaces the legacy look/feel by keeping the registration fields in an accessible in-app dialog connected directly to the selected training workflow.</p>
+    <p class="eyebrow">KYEM TRAINING CALENDAR</p>
+    <h1>Kentucky Emergency Management Training</h1>
+    <p class="intro">Search, filter, and register for upcoming KYEM-sponsored and partner training events. Source: <a href="https://www.kyem.ky.gov/emergency-management-professionals/training-calendar/-toggle-allupcoming-1160" target="_blank" rel="noopener noreferrer">kyem.ky.gov training calendar ↗</a></p>
   </header>
 
-  <section class="controls" aria-label="Filter trainings">
-    <label>Search<input bind:value={query} placeholder="Search by course, audience, location, notes, or date" /></label>
-    <label>Region<select bind:value={selectedRegion}>{#each regions as region}<option value={region}>{region}</option>{/each}</select></label>
-    <label>Delivery mode<select bind:value={selectedMode}>{#each modes as mode}<option value={mode}>{mode}</option>{/each}</select></label>
-    <label>Start date<select bind:value={selectedDate}>{#each allAvailableDates as date}<option value={date}>{date === 'All dates' ? date : formatDate(date)}</option>{/each}</select></label>
-  </section>
-
-  <div class="dates-row">
-    {#each allAvailableDates.slice(1) as date}
-      <button class:selected={selectedDate === date} on:click={() => (selectedDate = date)}>{formatDate(date)}</button>
-    {/each}
-    <button on:click={clearFilters}>Show all</button>
+  <div class="filter-bar" role="search" aria-label="Filter trainings">
+    <div class="filter-search-wrap">
+      <input class="filter-search" bind:value={query} placeholder="Search courses, location, audience…" aria-label="Search trainings" />
+      {#if hasActiveFilters}
+        <button class="filter-clear-btn" type="button" on:click={clearFilters} aria-label="Clear all filters">✕ Clear</button>
+      {/if}
+    </div>
+    <div class="filter-selects">
+      <label class="filter-select-label">
+        Region
+        <select bind:value={selectedRegion} class="filter-select">
+          {#each regions as region}<option value={region}>{region}</option>{/each}
+        </select>
+      </label>
+      <label class="filter-select-label">
+        Mode
+        <select bind:value={selectedMode} class="filter-select">
+          {#each modes as mode}<option value={mode}>{mode}</option>{/each}
+        </select>
+      </label>
+      <label class="filter-select-label">
+        Date
+        <select bind:value={selectedDate} class="filter-select">
+          {#each allAvailableDates as date}
+            <option value={date}>{date === 'All dates' ? 'All dates' : formatDate(date)}</option>
+          {/each}
+        </select>
+      </label>
+    </div>
   </div>
 
-  <p class="summary" role="status" aria-live="polite">Showing {filtered.length} of {trainings.length} trainings · Updated {formatDate(today)} (Eastern)</p>
+  <p class="summary" role="status" aria-live="polite">
+    {filtered.length === trainings.length
+      ? `${trainings.length} courses listed`
+      : `${filtered.length} of ${trainings.length} courses match`}
+    &nbsp;·&nbsp; Updated {formatDate(today)} (Eastern)
+  </p>
 
   {#if submissionMessage}<p class="submit-status" role="status" aria-live="polite">{submissionMessage}</p>{/if}
   {#if submissionError}<p class="submit-error" role="alert">{submissionError}</p>{/if}
@@ -1043,29 +1066,50 @@
     <table>
       <caption class="sr-only">KYEM training results with registration and calendar actions</caption>
       <thead>
-        <tr><th scope="col">Course</th><th scope="col">Dates</th><th scope="col">Region</th><th scope="col">Location</th><th scope="col">Tuition</th><th scope="col">Other costs / notes</th><th scope="col">Status</th><th scope="col">Registration</th><th scope="col">Calendar</th></tr>
+        <tr>
+          <th scope="col">Course</th>
+          <th scope="col">Dates</th>
+          <th scope="col">Location</th>
+          <th scope="col">Time / Notes</th>
+          <th scope="col">Status</th>
+          <th scope="col">Announcement</th>
+          <th scope="col">Register</th>
+          <th scope="col">Calendar</th>
+        </tr>
       </thead>
       <tbody>
         {#if filtered.length === 0}
-          <tr><td colspan="9" class="empty">No matching trainings found.</td></tr>
+          <tr><td colspan="8" class="empty">No matching trainings found. <button type="button" class="link-btn" on:click={clearFilters}>Clear filters</button></td></tr>
         {:else}
           {#each filtered as t}
             <tr>
-              <td data-label="Course"><strong>{t.title}</strong><div class="meta">{t.audience} · {t.mode}</div></td>
-              <td data-label="Dates">{formatDate(t.startDate)}–{formatDate(t.endDate)}</td>
-              <td data-label="Region">{t.region}</td>
+              <td data-label="Course">
+                <strong>{t.title}</strong>
+                <div class="meta">{t.audience} · <span class="mode-tag mode-{t.mode.toLowerCase().replace(/\s+/g, '-')}">{t.mode}</span> · {t.region}</div>
+              </td>
+              <td data-label="Dates" class="nowrap">
+                {#if t.startDate === t.endDate}{formatDate(t.startDate)}{:else}{formatDate(t.startDate)}<br>– {formatDate(t.endDate)}{/if}
+              </td>
               <td data-label="Location">{t.location}</td>
-              <td data-label="Tuition">{t.tuition}</td>
-              <td data-label="Other costs / notes">{t.other}</td>
-              <td data-label="Status"><span class="badge">{t.registration}</span></td>
-              <td data-label="Registration"><button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button></td>
+              <td data-label="Time / Notes">{t.other}</td>
+              <td data-label="Status"><span class="badge reg-{t.registration.toLowerCase().replace(/\s+/g, '-')}">{t.registration}</span></td>
+              <td data-label="Announcement">
+                {#if t.pdfUrl}
+                  <a class="pdf-link" href={t.pdfUrl} target="_blank" rel="noopener noreferrer">Course PDF ↗</a>
+                {:else}
+                  <span class="pdf-none">—</span>
+                {/if}
+              </td>
+              <td data-label="Register">
+                <button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button>
+              </td>
               <td data-label="Calendar">
                 <details class="calendar-nested">
-                  <summary class="calendar-summary">Add to calendar</summary>
+                  <summary class="calendar-summary">+ Cal</summary>
                   <div class="calendar-menu">
-                    <button type="button" class="calendar-btn apple" on:click={() => downloadICS(t)}> Apple (.ics)</button>
-                    <a class="calendar-btn google" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer">G Google</a>
-                    <a class="calendar-btn outlook" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer">O Outlook</a>
+                    <button type="button" class="calendar-btn apple" on:click={() => downloadICS(t)}>.ics</button>
+                    <a class="calendar-btn google" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer">Google</a>
+                    <a class="calendar-btn outlook" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer">Outlook</a>
                   </div>
                 </details>
               </td>
@@ -1590,9 +1634,6 @@
   .controls { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .75rem; }
   label { display: grid; gap: .35rem; color: #1f3350; }
   input, select, textarea { padding: .6rem; border: 1px solid #c5d0df; border-radius: 8px; font: inherit; }
-  .dates-row { display: flex; flex-wrap: wrap; gap: .4rem; margin: .75rem 0; }
-  .dates-row button { border: 1px solid #c5d0df; background: #fff; border-radius: 999px; padding: .26rem .6rem; }
-  .dates-row button.selected { background: #e7f1ff; border-color: #8fb0d8; }
   .summary { color: #425b80; }
   .intro-note { color: #5a4c2a; background: #fff9ea; border: 1px solid #f1ddb0; border-radius: 8px; padding: .55rem; }
 
@@ -1604,7 +1645,32 @@
   th, td { padding: .75rem; border-bottom: 1px solid #e6edf6; text-align: left; vertical-align: top; }
   thead th { background: #f3f7fc; }
   .meta { color: #5d6e87; margin-top: .25rem; }
-  .badge { background: #e7f1ff; color: #184778; padding: .2rem .5rem; border-radius: 999px; font-weight: 600; }
+  .badge { background: #e7f1ff; color: #184778; padding: .2rem .5rem; border-radius: 999px; font-weight: 600; font-size: .78rem; }
+  .badge.reg-open { background: #e6f9ef; color: #146035; }
+  .badge.reg-see-organizer { background: #fff8e1; color: #7a5800; }
+  .badge.reg-closed { background: #fce8e8; color: #7a1c1c; }
+  .nowrap { white-space: nowrap; }
+  .pdf-link { color: #0f5db0; text-decoration: none; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+  .pdf-link:hover { text-decoration: underline; }
+  .pdf-none { color: #9aaccb; font-size: .82rem; }
+  .mode-tag { display: inline-block; font-size: .7rem; font-weight: 700; border-radius: 4px; padding: .1rem .35rem; vertical-align: middle; }
+  .mode-tag.mode-in-person { background: #e6f3ff; color: #0a4a8a; }
+  .mode-tag.mode-virtual { background: #f0eaff; color: #4a1a8a; }
+  .mode-tag.mode-hybrid { background: #e6fff5; color: #0a5a3a; }
+  .link-btn { background: none; border: none; color: #0f5db0; text-decoration: underline; cursor: pointer; padding: 0; font-size: inherit; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .65rem; margin-bottom: .75rem; }
+  .filter-search-wrap { flex: 1 1 220px; display: flex; align-items: center; gap: .4rem; }
+  .filter-search { flex: 1; border: 1px solid #c5d4e8; border-radius: 8px; padding: .45rem .7rem; font-size: .9rem; background: #fff; color: #17253b; }
+  .filter-search:focus { outline: 2px solid #1c73d3; border-color: #1c73d3; }
+  .filter-clear-btn { border: 1px solid #c5d4e8; border-radius: 999px; background: #fff; color: #5d6e87; padding: .3rem .65rem; font-size: .8rem; cursor: pointer; white-space: nowrap; }
+  .filter-clear-btn:hover { background: #f3f7fc; color: #17253b; }
+  .filter-selects { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .filter-select-label { font-size: .8rem; color: #4a5e78; display: flex; align-items: center; gap: .3rem; }
+  .filter-select { border: 1px solid #c5d4e8; border-radius: 8px; padding: .35rem .55rem; font-size: .85rem; background: #fff; color: #17253b; }
+  .filter-select:focus { outline: 2px solid #1c73d3; }
+
   .register-btn { border: 1px solid #0f5db0; background: #1c73d3; color: #fff; border-radius: 999px; padding: .35rem .7rem; }
   .calendar-summary { list-style: none; border: 1px solid #8fb0d8; background: #f3f8ff; color: #113b68; border-radius: 999px; padding: .35rem .7rem; font-weight: 600; cursor: pointer; }
   .calendar-summary::-webkit-details-marker { display: none; }
