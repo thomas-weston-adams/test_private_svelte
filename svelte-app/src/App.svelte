@@ -12,6 +12,7 @@
   let selectedRegion = 'All';
   let selectedMode = 'All';
   let selectedDate = 'All dates';
+  let selectedCategory = 'All';
 
   // Backend docs: set these to your master Google Sheet and CSV publish URLs.
   const BACKEND_DOCS_SHEET_URL = '';
@@ -188,6 +189,7 @@
     selectedRegion = 'All';
     selectedMode = 'All';
     selectedDate = 'All dates';
+    selectedCategory = 'All';
   }
 
   function buildEventDetails(training) {
@@ -304,7 +306,15 @@
     return [training.title, training.audience, training.location, training.other, training.startDate, training.endDate, training.region, training.mode].join(' ').toLowerCase().includes(q);
   };
 
-  $: hasActiveFilters = query || selectedRegion !== 'All' || selectedMode !== 'All' || selectedDate !== 'All dates';
+  const categories = [
+    { label: 'All', match: null },
+    { label: 'Emergency Mgmt', match: ['EM & utility professionals', 'EM + supervisory responders', 'EM staff & volunteer coordinators', 'EOC staff & local EM', 'Local EM & damage assessment teams'] },
+    { label: 'Fire & Rescue', match: ['Fire & CSEPP responders', 'Fire & EV responders', 'Fire & hazmat responders', 'Rescue personnel', 'Search & rescue teams', 'Water rescue teams', 'First responders'] },
+    { label: 'HazMat', match: ['HazMat & CSEPP responders', 'HazMat responders', 'Fire & hazmat responders'] },
+    { label: 'Command & Planning', match: ['Incident command staff', 'Planning staff & local officials', 'EM + supervisory responders'] },
+    { label: 'Communications', match: ['PIO & EM communications staff'] },
+  ];
+  $: hasActiveFilters = query || selectedRegion !== 'All' || selectedMode !== 'All' || selectedDate !== 'All dates' || selectedCategory !== 'All';
 
   $: filteredNews = newsCategory === 'All' ? kyemNews : kyemNews.filter((n) => n.category === newsCategory);
 
@@ -312,7 +322,9 @@
     const regionMatch = selectedRegion === 'All' || training.region === selectedRegion;
     const modeMatch = selectedMode === 'All' || training.mode === selectedMode;
     const dateMatch = selectedDate === 'All dates' || training.startDate === selectedDate;
-    return regionMatch && modeMatch && dateMatch && inQuery(training);
+    const cat = categories.find(c => c.label === selectedCategory);
+    const categoryMatch = !cat || !cat.match || cat.match.includes(training.audience);
+    return regionMatch && modeMatch && dateMatch && categoryMatch && inQuery(training);
   });
 
   $: searchableClassOptions = trainings.filter((training) => {
@@ -1021,6 +1033,16 @@
     <p class="intro">Search, filter, and register for upcoming KYEM-sponsored and partner training events. Source: <a href="https://www.kyem.ky.gov/emergency-management-professionals/training-calendar/-toggle-allupcoming-1160" target="_blank" rel="noopener noreferrer">kyem.ky.gov training calendar ↗</a></p>
   </header>
 
+  <nav class="category-bar" aria-label="Filter by category">
+    {#each categories as cat}
+      <button
+        type="button"
+        class="cat-pill {selectedCategory === cat.label ? 'active' : ''}"
+        on:click={() => selectedCategory = cat.label}
+      >{cat.label}</button>
+    {/each}
+  </nav>
+
   <div class="filter-bar" role="search" aria-label="Filter trainings">
     <div class="filter-search-wrap">
       <input class="filter-search" bind:value={query} placeholder="Search courses, location, audience…" aria-label="Search trainings" />
@@ -1104,14 +1126,11 @@
                 <button type="button" class="register-btn" on:click={() => openRegistration(t)}>Register</button>
               </td>
               <td data-label="Calendar">
-                <details class="calendar-nested">
-                  <summary class="calendar-summary">+ Cal</summary>
-                  <div class="calendar-menu">
-                    <button type="button" class="calendar-btn apple" on:click={() => downloadICS(t)}>.ics</button>
-                    <a class="calendar-btn google" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer">Google</a>
-                    <a class="calendar-btn outlook" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer">Outlook</a>
-                  </div>
-                </details>
+                <div class="cal-group">
+                  <button type="button" class="cal-seg" on:click={() => downloadICS(t)} title="Download .ics (Apple Calendar, Outlook desktop, etc.)">&#x1F4C5; .ics</button>
+                  <a class="cal-seg" href={getCalendarUrls(t).google} target="_blank" rel="noopener noreferrer" title="Add to Google Calendar">Google</a>
+                  <a class="cal-seg" href={getCalendarUrls(t).outlook} target="_blank" rel="noopener noreferrer" title="Add to Outlook Web">Outlook</a>
+                </div>
               </td>
             </tr>
           {/each}
@@ -1671,13 +1690,16 @@
   .filter-select { border: 1px solid #c5d4e8; border-radius: 8px; padding: .35rem .55rem; font-size: .85rem; background: #fff; color: #17253b; }
   .filter-select:focus { outline: 2px solid #1c73d3; }
 
+  .category-bar { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+  .cat-pill { padding: .38rem .75rem; border-radius: 999px; border: 1px solid #c5d4e8; background: #f8fafd; color: #2a4a70; font-size: .83rem; font-weight: 600; cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+  .cat-pill:hover { background: #e4eef9; border-color: #93b5f5; color: #0f5db0; }
+  .cat-pill.active { background: #1c73d3; border-color: #0f5db0; color: #fff; }
+
   .register-btn { border: 1px solid #0f5db0; background: #1c73d3; color: #fff; border-radius: 999px; padding: .35rem .7rem; }
-  .cal-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
-  .cal-btn { font-size: .75rem; padding: .28rem .5rem; border-radius: 6px; border: 1px solid; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: .25rem; font-weight: 600; line-height: 1.2; }
-  .cal-btn:hover { filter: brightness(.93); }
-  .cal-ics  { background: #f5f5f7; border-color: #c8c8cc; color: #1d1d1f; }
-  .cal-google  { background: #e8f0fe; border-color: #93b5f5; color: #1558d6; }
-  .cal-outlook { background: #e3f2fd; border-color: #90c8f0; color: #0063b1; }
+  .cal-group { display: inline-flex; border: 1px solid #c5d4e8; border-radius: 8px; overflow: hidden; }
+  .cal-seg { padding: .34rem .58rem; font-size: .78rem; font-weight: 600; background: #f8fafd; color: #2a4a70; border: none; border-right: 1px solid #c5d4e8; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: .2rem; line-height: 1.2; transition: background .12s, color .12s; }
+  .cal-seg:last-child { border-right: none; }
+  .cal-seg:hover { background: #e4eef9; color: #0f5db0; }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(8,23,48,.45); }
   .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(980px, 95vw); max-height: 92vh; overflow: auto; background: #fff; border-radius: 12px; padding: 1rem; }
