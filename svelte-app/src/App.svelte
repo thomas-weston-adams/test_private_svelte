@@ -1672,13 +1672,12 @@
   .filter-select:focus { outline: 2px solid #1c73d3; }
 
   .register-btn { border: 1px solid #0f5db0; background: #1c73d3; color: #fff; border-radius: 999px; padding: .35rem .7rem; }
-  .calendar-summary { list-style: none; border: 1px solid #8fb0d8; background: #f3f8ff; color: #113b68; border-radius: 999px; padding: .35rem .7rem; font-weight: 600; cursor: pointer; }
-  .calendar-summary::-webkit-details-marker { display: none; }
-  .calendar-menu { margin-top: .4rem; display: flex; flex-direction: column; gap: .35rem; min-width: 180px; }
-  .calendar-btn { border-radius: 999px; padding: .33rem .65rem; border: 1px solid; text-decoration: none; }
-  .calendar-btn.apple { border-color: #d8d8db; background: #f7f7f8; color: #111; }
-  .calendar-btn.google { border-color: #8fb0d8; background: #f3f8ff; color: #113b68; }
-  .calendar-btn.outlook { border-color: #8fb0d8; background: #eef6ff; color: #0a3f73; }
+  .cal-actions { display: flex; gap: .3rem; flex-wrap: wrap; }
+  .cal-btn { font-size: .75rem; padding: .28rem .5rem; border-radius: 6px; border: 1px solid; cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: .25rem; font-weight: 600; line-height: 1.2; }
+  .cal-btn:hover { filter: brightness(.93); }
+  .cal-ics  { background: #f5f5f7; border-color: #c8c8cc; color: #1d1d1f; }
+  .cal-google  { background: #e8f0fe; border-color: #93b5f5; color: #1558d6; }
+  .cal-outlook { background: #e3f2fd; border-color: #90c8f0; color: #0063b1; }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(8,23,48,.45); }
   .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(980px, 95vw); max-height: 92vh; overflow: auto; background: #fff; border-radius: 12px; padding: 1rem; }
